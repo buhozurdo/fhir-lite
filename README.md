@@ -190,6 +190,9 @@ python -m tests.test_fhir_lite
 python -m tests.test_security
 python -m tests.test_ndjson
 python -m tests.test_client
+python -m tests.test_typing
+python -m tests.test_version
+python -m tests.test_operation_outcome
 ```
 
 ---
@@ -200,15 +203,21 @@ python -m tests.test_client
 fhir-lite/
 ├── fhir_lite/
 │   ├── __init__.py       # Public package interface
-│   ├── client.py         # Zero-dependency FHIR REST client (urllib)
+│   ├── client.py         # Zero-dependency FHIR REST client (urllib) & FHIRError
 │   ├── ndjson.py         # Streaming NDJSON Bulk Data reader/writer (gzip support)
-│   ├── resources.py      # Core resources (Patient, Observation, Bundle, MedicationRequest, etc.)
-│   └── serializer.py     # Fast ElementTree/JSON converter (XXE/DoS protected, primitive extensions)
+│   ├── py.typed          # PEP 561 inline typing marker
+│   ├── resources.py      # Core resources (Patient, Observation, Bundle, OperationOutcome, etc.)
+│   ├── serializer.py     # Fast ElementTree/JSON converter (XXE/DoS protected, primitive extensions)
+│   ├── types.py          # TypedDict definitions for common FHIR structures
+│   └── version.py        # FHIRVersion (R4, R4B, R5) declarations and context manager
 ├── tests/
-│   ├── test_client.py    # Mocked FHIR REST client tests
-│   ├── test_fhir_lite.py # Core resource, validation, and extension test suite
-│   ├── test_ndjson.py    # Streaming & gzip bulk data tests
-│   └── test_security.py  # XXE, DTD, and parser security tests
+│   ├── test_client.py            # Mocked FHIR REST client tests
+│   ├── test_fhir_lite.py         # Core resource, validation, and extension test suite
+│   ├── test_ndjson.py            # Streaming & gzip bulk data tests
+│   ├── test_operation_outcome.py # OperationOutcome & error integration tests
+│   ├── test_security.py          # XXE, DTD, and parser security tests
+│   ├── test_typing.py            # PEP 561 & TypedDict tests
+│   └── test_version.py           # FHIR R4/R5 version context & alias tests
 ├── pyproject.toml        # PEP 517/621 packaging metadata
 └── README.md
 ```

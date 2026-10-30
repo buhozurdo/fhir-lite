@@ -330,4 +330,62 @@ class Medication(FHIRResource):
         return errors
 
 
+class OperationOutcome(FHIRResource):
+    """FHIR OperationOutcome resource for operation results and error details."""
+    resource_type = "OperationOutcome"
+    array_fields = {"issue"}
 
+    VALID_SEVERITIES = {"fatal", "error", "warning", "information"}
+    VALID_CODES = {
+        "invalid", "structure", "required", "value", "invariant",
+        "security", "login", "unknown", "expired", "forbidden",
+        "suppressed", "processing", "not-supported", "duplicate",
+        "multiple-matches", "not-found", "deleted", "too-long",
+        "code-invalid", "extension", "too-costly", "business-rule",
+        "conflict", "transient", "lock-error", "no-store", "exception",
+        "timeout", "incomplete", "throttled", "informational",
+    }
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        issues = self.data.get("issue", [])
+        if not issues:
+            errors.append("OperationOutcome requires at least one 'issue'")
+        for i, issue in enumerate(issues):
+            if not isinstance(issue, dict):
+                errors.append(f"issue[{i}] must be a dict")
+                continue
+            sev = issue.get("severity")
+            if not sev:
+                errors.append(f"issue[{i}] requires 'severity'")
+            elif sev not in self.VALID_SEVERITIES:
+                errors.append(f"issue[{i}] invalid severity '{sev}'")
+            code = issue.get("code")
+            if not code:
+                errors.append(f"issue[{i}] requires 'code'")
+            elif code not in self.VALID_CODES:
+                errors.append(f"issue[{i}] invalid code '{code}'")
+        return errors
+
+    @property
+    def issues(self) -> list[dict]:
+        """Returns the list of issue dicts."""
+        return self.data.get("issue", [])
+
+    @property
+    def severity(self) -> str | None:
+        """Returns the severity of the first issue, if any."""
+        issues = self.issues
+        return issues[0].get("severity") if issues else None
+
+    @property
+    def is_error(self) -> bool:
+        """True if any issue has severity 'fatal' or 'error'."""
+        return any(i.get("severity") in ("fatal", "error") for i in self.issues)
+
+    def first_text(self) -> str | None:
+        """Returns the diagnostics text of the first issue, if any."""
+        issues = self.issues
+        if not issues:
+            return None
+        return issues[0].get("diagnostics") or issues[0].get("details", {}).get("text")

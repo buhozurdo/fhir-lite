@@ -24,6 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Typing :: Typed",
 ]
 dependencies = []
 
@@ -35,3 +36,6 @@ Repository = "https://github.com/BuhoZurdo/fhir-lite.git"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fhir_lite*"]
+
+[tool.setuptools.package-data]
+fhir_lite = ["py.typed"]

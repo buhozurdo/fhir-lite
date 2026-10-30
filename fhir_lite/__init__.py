@@ -21,6 +21,7 @@ from .resources import (
     Condition,
     MedicationRequest,
     Medication,
+    OperationOutcome,
 )
 from .ndjson import (
     iter_ndjson,
@@ -31,6 +32,33 @@ from .ndjson import (
 from .client import (
     FHIRClient,
     FHIRError,
+)
+from .types import (
+    ExtensionDict,
+    CodingDict,
+    CodeableConceptDict,
+    ReferenceDict,
+    QuantityDict,
+    PeriodDict,
+    IdentifierDict,
+    HumanNameDict,
+    ContactPointDict,
+    AddressDict,
+    MetaDict,
+    BundleEntryDict,
+    BundleEntryRequestDict,
+    BundleEntryResponseDict,
+    DosageDict,
+    NarrativeDict,
+    IssueDict,
+)
+from .version import (
+    FHIRVersion,
+    get_fhir_version,
+    set_fhir_version,
+    fhir_version_context,
+    normalize_field,
+    get_version_info,
 )
 
 
@@ -45,6 +73,7 @@ def from_xml(xml_str: str) -> FHIRResource:
 
 
 __all__ = [
+    # Resources
     "FHIRResource",
     "Patient",
     "Observation",
@@ -54,17 +83,47 @@ __all__ = [
     "Condition",
     "MedicationRequest",
     "Medication",
+    "OperationOutcome",
+    # Client
     "FHIRClient",
     "FHIRError",
+    # Convenience parsers
     "from_json",
     "from_xml",
+    # Serializer
     "json_to_xml",
     "xml_to_json",
     "dict_to_xml",
     "xml_to_dict",
     "safe_fromstring",
+    # NDJSON
     "iter_ndjson",
     "write_ndjson",
     "loads_ndjson",
     "dumps_ndjson",
+    # TypedDicts (fhir_lite.types)
+    "ExtensionDict",
+    "CodingDict",
+    "CodeableConceptDict",
+    "ReferenceDict",
+    "QuantityDict",
+    "PeriodDict",
+    "IdentifierDict",
+    "HumanNameDict",
+    "ContactPointDict",
+    "AddressDict",
+    "MetaDict",
+    "BundleEntryDict",
+    "BundleEntryRequestDict",
+    "BundleEntryResponseDict",
+    "DosageDict",
+    "NarrativeDict",
+    "IssueDict",
+    # Version API (fhir_lite.version)
+    "FHIRVersion",
+    "get_fhir_version",
+    "set_fhir_version",
+    "fhir_version_context",
+    "normalize_field",
+    "get_version_info",
 ]

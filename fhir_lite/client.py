@@ -4,17 +4,17 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from typing import TypeVar, Any
-from .resources import FHIRResource, Bundle
+from .resources import FHIRResource, Bundle, OperationOutcome
 
 T = TypeVar("T", bound=FHIRResource)
 
 
 class FHIRError(Exception):
     """Raised when a FHIR server responds with an HTTP error or OperationOutcome."""
-    def __init__(self, status_code: int, message: str, outcome: dict | None = None):
+    def __init__(self, status_code: int, message: str, outcome: "OperationOutcome | None" = None):
         super().__init__(f"FHIR HTTP {status_code}: {message}")
         self.status_code = status_code
-        self.outcome = outcome
+        self.outcome: OperationOutcome | None = outcome
 
 
 class FHIRClient:
@@ -85,9 +85,13 @@ class FHIRClient:
                 return json.loads(resp_bytes.decode("utf-8"))
         except urllib.error.HTTPError as err:
             err_body = err.read().decode("utf-8") if err.fp else ""
-            outcome = None
+            outcome: OperationOutcome | None = None
             try:
-                outcome = json.loads(err_body)
+                raw = json.loads(err_body)
+                if isinstance(raw, dict) and raw.get("resourceType") == "OperationOutcome":
+                    outcome = OperationOutcome(raw)
+                elif isinstance(raw, dict):
+                    outcome = OperationOutcome({"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "processing", "diagnostics": err_body}]})
             except Exception:
                 pass
             raise FHIRError(err.code, err_body or err.reason, outcome=outcome) from err
