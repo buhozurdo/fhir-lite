@@ -117,30 +117,79 @@ Inheriting from `FHIRResource` automatically registers the new resource type wit
 ```python
 from fhir_lite import FHIRResource
 
-class Condition(FHIRResource):
-    resource_type = "Condition"
-    array_fields = {"category", "evidence", "note"}
+class CarePlan(FHIRResource):
+    resource_type = "CarePlan"
+    array_fields = {"category", "activity", "note"}
 
     def validate(self) -> list[str]:
         errors = super().validate()
-        if "clinicalStatus" not in self.data:
-            errors.append("Condition requires 'clinicalStatus'")
+        if "status" not in self.data:
+            errors.append("CarePlan requires 'status'")
         return errors
 
 # Usage
-cond = Condition(id="c-01", clinicalStatus="active")
-print(cond.is_valid)  # True
-print(cond.to_xml())
+plan = CarePlan(id="cp-01", status="active")
+print(plan.is_valid)  # True
+print(plan.to_xml())
+```
+
+---
+
+### 5. FHIR Bulk Data (NDJSON Streaming)
+
+Process massive clinical datasets (e.g. from AWS HealthLake, Google Cloud Healthcare, or Athena) line-by-line with $O(1)$ constant memory overhead and transparent `.gz` decompression:
+
+```python
+from fhir_lite import iter_ndjson, write_ndjson
+
+# Stream resources from plain or gzipped NDJSON
+for resource in iter_ndjson("patients.ndjson.gz"):
+    if resource.is_valid:
+        print(f"Processed: {resource.resource_type}/{resource.id}")
+
+# Stream write resources to a compressed file
+write_ndjson([patient, observation], "export.ndjson.gz")
+```
+
+---
+
+### 6. Zero-Dependency REST Client (`FHIRClient`)
+
+Interact with FHIR servers (e.g. HAPI, AWS HealthLake, Google Healthcare) using Python's standard library `urllib` without installing `requests` or `httpx`:
+
+```python
+from fhir_lite import FHIRClient, Patient
+
+client = FHIRClient(
+    base_url="https://hapi.fhir.org/baseR4",
+    auth="my-bearer-token"  # or auth=("user", "password")
+)
+
+# Fetch a resource by ID (auto-instantiates typed Patient)
+patient = client.read(Patient, "12345")
+print(patient.gender)
+
+# Search with parameters (returns typed Bundle)
+bundle = client.search(Patient, family="Smith", _count=20)
+for pat in bundle.get_resources():
+    print(pat.id)
+
+# Create / Update / Delete
+new_patient = client.create(Patient(gender="female", active=True))
+client.delete(Patient, new_patient.id)
 ```
 
 ---
 
 ## Testing
 
-Run the included standalone test suite (no third-party test runners needed):
+Run the included standalone test suites (no third-party test runners needed):
 
 ```bash
 python -m tests.test_fhir_lite
+python -m tests.test_security
+python -m tests.test_ndjson
+python -m tests.test_client
 ```
 
 ---
@@ -151,10 +200,16 @@ python -m tests.test_fhir_lite
 fhir-lite/
 ├── fhir_lite/
 │   ├── __init__.py       # Public package interface
-│   ├── resources.py      # FHIRResource base, Patient, Observation
-│   └── serializer.py     # Fast ElementTree/JSON converter
+│   ├── client.py         # Zero-dependency FHIR REST client (urllib)
+│   ├── ndjson.py         # Streaming NDJSON Bulk Data reader/writer (gzip support)
+│   ├── resources.py      # Core resources (Patient, Observation, Bundle, MedicationRequest, etc.)
+│   └── serializer.py     # Fast ElementTree/JSON converter (XXE/DoS protected, primitive extensions)
 ├── tests/
-│   └── test_fhir_lite.py # Self-check test suite
+│   ├── test_client.py    # Mocked FHIR REST client tests
+│   ├── test_fhir_lite.py # Core resource, validation, and extension test suite
+│   ├── test_ndjson.py    # Streaming & gzip bulk data tests
+│   └── test_security.py  # XXE, DTD, and parser security tests
+├── pyproject.toml        # PEP 517/621 packaging metadata
 └── README.md
 ```
 

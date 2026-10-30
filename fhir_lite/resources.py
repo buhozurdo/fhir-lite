@@ -1,6 +1,7 @@
 import json
 import xml.etree.ElementTree as ET
-from .serializer import dict_to_xml, xml_to_dict, COMMON_ARRAY_FIELDS
+from .serializer import dict_to_xml, xml_to_dict, safe_fromstring, COMMON_ARRAY_FIELDS
+
 
 
 class FHIRResource:
@@ -33,7 +34,7 @@ class FHIRResource:
 
     @classmethod
     def from_xml(cls, xml_str: str) -> "FHIRResource":
-        root = ET.fromstring(xml_str)
+        root = safe_fromstring(xml_str)
         res_type = root.tag.split("}")[-1] if "}" in root.tag else root.tag
         target_cls = cls if cls is not FHIRResource else cls._registry.get(res_type, cls)
         arrays = target_cls.array_fields | COMMON_ARRAY_FIELDS
@@ -218,4 +219,115 @@ class Bundle(FHIRResource):
         if isinstance(self.data.get("total"), int):
             self.data["total"] = len(self.data["entry"])
         return entry
+
+
+class Practitioner(FHIRResource):
+    """FHIR Practitioner resource for healthcare providers."""
+    resource_type = "Practitioner"
+    array_fields = {
+        "identifier", "name", "telecom", "address", "gender",
+        "qualification", "communication"
+    }
+    VALID_GENDERS = {"male", "female", "other", "unknown"}
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        gender = self.data.get("gender")
+        if gender is not None and gender not in self.VALID_GENDERS:
+            errors.append(f"Invalid gender '{gender}'. Must be one of: {', '.join(sorted(self.VALID_GENDERS))}")
+        active = self.data.get("active")
+        if active is not None and not isinstance(active, bool):
+            errors.append(f"Field 'active' must be a boolean, got {type(active).__name__}")
+        return errors
+
+
+class Encounter(FHIRResource):
+    """FHIR Encounter resource for healthcare interactions."""
+    resource_type = "Encounter"
+    array_fields = {
+        "identifier", "statusHistory", "type", "serviceType",
+        "episodeOfCare", "basedOn", "participant", "appointment",
+        "reasonCode", "reasonReference", "diagnosis", "account",
+        "location", "serviceProvider"
+    }
+    VALID_STATUSES = {
+        "planned", "arrived", "triaged", "in-progress", "onleave",
+        "finished", "cancelled", "entered-in-error", "unknown"
+    }
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        status = self.data.get("status")
+        if not status:
+            errors.append("Encounter requires 'status'")
+        elif status not in self.VALID_STATUSES:
+            errors.append(f"Invalid status '{status}'. Must be one of: {', '.join(sorted(self.VALID_STATUSES))}")
+        if "class" not in self.data and "class_" not in self.data:
+            errors.append("Encounter requires 'class'")
+        return errors
+
+
+class Condition(FHIRResource):
+    """FHIR Condition resource for diagnoses, problems, and health concerns."""
+    resource_type = "Condition"
+    array_fields = {
+        "identifier", "category", "bodySite", "evidence", "note", "stage"
+    }
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        if "subject" not in self.data and "patient" not in self.data:
+            errors.append("Condition requires 'subject' (or 'patient')")
+        return errors
+
+
+class MedicationRequest(FHIRResource):
+    """FHIR MedicationRequest resource for prescriptions and medication orders."""
+    resource_type = "MedicationRequest"
+    array_fields = {
+        "identifier", "basedOn", "priorPrescription", "category",
+        "insurance", "note", "dosageInstruction", "dispenseRequest"
+    }
+    VALID_STATUSES = {
+        "active", "on-hold", "cancelled", "completed",
+        "entered-in-error", "stopped", "draft", "unknown"
+    }
+    VALID_INTENTS = {
+        "proposal", "plan", "order", "original-order",
+        "reflex-order", "filler-order", "instance-order", "option"
+    }
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        status = self.data.get("status")
+        if not status:
+            errors.append("MedicationRequest requires 'status'")
+        elif status not in self.VALID_STATUSES:
+            errors.append(f"Invalid status '{status}'. Must be one of: {', '.join(sorted(self.VALID_STATUSES))}")
+
+        intent = self.data.get("intent")
+        if not intent:
+            errors.append("MedicationRequest requires 'intent'")
+        elif intent not in self.VALID_INTENTS:
+            errors.append(f"Invalid intent '{intent}'. Must be one of: {', '.join(sorted(self.VALID_INTENTS))}")
+
+        if "subject" not in self.data:
+            errors.append("MedicationRequest requires 'subject'")
+        return errors
+
+
+class Medication(FHIRResource):
+    """FHIR Medication resource for drug definitions and ingredients."""
+    resource_type = "Medication"
+    array_fields = {"identifier", "ingredient", "extension"}
+    VALID_STATUSES = {"active", "inactive", "entered-in-error"}
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        status = self.data.get("status")
+        if status is not None and status not in self.VALID_STATUSES:
+            errors.append(f"Invalid status '{status}'. Must be one of: {', '.join(sorted(self.VALID_STATUSES))}")
+        return errors
+
+
 

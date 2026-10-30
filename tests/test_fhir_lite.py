@@ -4,6 +4,11 @@ from fhir_lite import (
     Patient,
     Observation,
     Bundle,
+    Practitioner,
+    Encounter,
+    Condition,
+    MedicationRequest,
+    Medication,
     from_json,
     from_xml,
     json_to_xml,
@@ -66,21 +71,21 @@ def run_tests():
     assert obs_from_xml.status == "final"
 
     # 4. Custom resource subclassing
-    class Condition(FHIRResource):
-        resource_type = "Condition"
+    class CarePlan(FHIRResource):
+        resource_type = "CarePlan"
         def validate(self):
             errs = super().validate()
-            if "clinicalStatus" not in self.data:
-                errs.append("Condition requires clinicalStatus")
+            if "status" not in self.data:
+                errs.append("CarePlan requires status")
             return errs
 
-    cond = Condition(id="c1", clinicalStatus="active")
-    assert cond.is_valid
-    assert cond.to_dict()["clinicalStatus"] == "active"
-    cond_xml = cond.to_xml()
-    parsed_cond = from_xml(cond_xml)
-    assert isinstance(parsed_cond, Condition)
-    assert parsed_cond.clinicalStatus == "active"
+    plan = CarePlan(id="cp1", status="active")
+    assert plan.is_valid
+    assert plan.to_dict()["status"] == "active"
+    plan_xml = plan.to_xml()
+    parsed_plan = from_xml(plan_xml)
+    assert isinstance(parsed_plan, CarePlan)
+    assert parsed_plan.status == "active"
 
     # 5. Bundle support & nested resources
     bundle = Bundle(type="searchset", total=0)
@@ -133,6 +138,102 @@ def run_tests():
     assert parsed_resources[0].id == "pat-bundle-1"
     assert isinstance(parsed_resources[1], Observation)
     assert parsed_resources[1].status == "final"
+
+    # 6. Core clinical resources: Practitioner, Encounter, Condition
+    doc = Practitioner(id="dr-house", gender="male", active=True, name=[{"family": "House", "given": ["Gregory"]}])
+    assert doc.is_valid
+    assert doc.gender == "male"
+    assert doc.name[0]["family"] == "House"
+    doc_xml = doc.to_xml()
+    parsed_doc = from_xml(doc_xml)
+    assert isinstance(parsed_doc, Practitioner)
+    assert parsed_doc.id == "dr-house"
+
+    invalid_doc = Practitioner(id="dr-bad", gender="martian")
+    assert not invalid_doc.is_valid
+    assert any("Invalid gender" in e for e in invalid_doc.validate())
+
+    enc = Encounter(id="enc-01", status="finished", class_={"code": "AMB", "display": "ambulatory"})
+    assert enc.is_valid
+    assert enc.status == "finished"
+    enc_xml = enc.to_xml()
+    parsed_enc = from_xml(enc_xml)
+    assert isinstance(parsed_enc, Encounter)
+
+    invalid_enc = Encounter(id="enc-bad", status="not-a-status")
+    assert not invalid_enc.is_valid
+
+    cond = Condition(id="cond-01", subject={"reference": "Patient/example-1"}, clinicalStatus={"text": "active"})
+    assert cond.is_valid
+    cond_xml = cond.to_xml()
+    parsed_cond = from_xml(cond_xml)
+    assert isinstance(parsed_cond, Condition)
+    assert parsed_cond.subject["reference"] == "Patient/example-1"
+
+    invalid_cond = Condition(id="cond-no-subject")
+    assert not invalid_cond.is_valid
+    assert any("requires 'subject'" in e for e in invalid_cond.validate())
+
+    # 7. Medication resources: MedicationRequest & Medication
+    med = Medication(id="med-amox", status="active", code={"text": "Amoxicillin 500mg"})
+    assert med.is_valid
+    assert med.status == "active"
+    med_xml = med.to_xml()
+    parsed_med = from_xml(med_xml)
+    assert isinstance(parsed_med, Medication)
+    assert parsed_med.id == "med-amox"
+
+    med_req = MedicationRequest(
+        id="mr-01",
+        status="active",
+        intent="order",
+        subject={"reference": "Patient/example-1"},
+        medicationReference={"reference": "Medication/med-amox"}
+    )
+    assert med_req.is_valid
+    assert med_req.status == "active"
+    assert med_req.intent == "order"
+    req_xml = med_req.to_xml()
+    parsed_req = from_xml(req_xml)
+    assert isinstance(parsed_req, MedicationRequest)
+    assert parsed_req.intent == "order"
+
+    invalid_req = MedicationRequest(id="mr-bad", status="bad-status", intent="bad-intent")
+    assert not invalid_req.is_valid
+    errs = invalid_req.validate()
+    assert any("Invalid status" in e for e in errs)
+    assert any("Invalid intent" in e for e in errs)
+    assert any("requires 'subject'" in e for e in errs)
+
+    # 8. Primitive extensions support (_element in JSON <-> <element value="..."> in XML)
+    ext_patient_json = """{
+  "resourceType": "Patient",
+  "id": "pat-ext",
+  "gender": "other",
+  "_gender": {
+    "extension": [
+      {
+        "url": "http://example.org/fhir/StructureDefinition/gender-identity",
+        "valueString": "non-binary"
+      }
+    ]
+  }
+}"""
+    ext_xml = json_to_xml(ext_patient_json)
+    assert '<gender value="other">' in ext_xml or '<gender value="other" >' in ext_xml
+    assert 'url="http://example.org/fhir/StructureDefinition/gender-identity"' in ext_xml
+    assert '<valueString value="non-binary"' in ext_xml
+
+    back_json = xml_to_json(ext_xml)
+    parsed_ext_pat = from_json(back_json)
+    assert parsed_ext_pat.gender == "other"
+    assert "_gender" in parsed_ext_pat
+    assert parsed_ext_pat["_gender"]["extension"][0]["valueString"] == "non-binary"
+
+    # Also test from_xml directly
+    parsed_from_xml = from_xml(ext_xml)
+    assert parsed_from_xml.gender == "other"
+    assert parsed_from_xml["_gender"]["extension"][0]["valueString"] == "non-binary"
 
     print("All FHIR Lite self-checks passed successfully!")
 
