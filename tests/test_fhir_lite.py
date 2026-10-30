@@ -3,6 +3,7 @@ from fhir_lite import (
     FHIRResource,
     Patient,
     Observation,
+    Bundle,
     from_json,
     from_xml,
     json_to_xml,
@@ -80,6 +81,58 @@ def run_tests():
     parsed_cond = from_xml(cond_xml)
     assert isinstance(parsed_cond, Condition)
     assert parsed_cond.clinicalStatus == "active"
+
+    # 5. Bundle support & nested resources
+    bundle = Bundle(type="searchset", total=0)
+    assert bundle.is_valid
+
+    invalid_bundle = Bundle(type="unknown-type")
+    assert not invalid_bundle.is_valid
+    assert any("Invalid Bundle type" in e for e in invalid_bundle.validate())
+
+    p = Patient(id="pat-bundle-1", active=True, gender="female")
+    o = Observation(id="obs-bundle-1", status="final", code={"text": "Pulse"})
+    bundle.add_entry(p, full_url="http://example.org/fhir/Patient/pat-bundle-1")
+    bundle.add_entry(o, full_url="http://example.org/fhir/Observation/obs-bundle-1")
+
+    assert len(bundle.entries) == 2
+    assert bundle.total == 2
+
+    # Verify resource extraction
+    extracted = bundle.get_resources()
+    assert len(extracted) == 2
+    assert isinstance(extracted[0], Patient)
+    assert isinstance(extracted[1], Observation)
+    assert extracted[0].id == "pat-bundle-1"
+    assert extracted[1].status == "final"
+
+    # Verify filter by type
+    patients = bundle.get_resources_by_type("Patient")
+    assert len(patients) == 1
+    assert patients[0].gender == "female"
+
+    observations = bundle.get_resources_by_type(Observation)
+    assert len(observations) == 1
+    assert observations[0].id == "obs-bundle-1"
+
+    # Verify XML <-> JSON roundtrip with inner resource elements
+    bundle_xml = bundle.to_xml()
+    assert "<Bundle" in bundle_xml
+    assert "<entry>" in bundle_xml
+    assert "<resource>" in bundle_xml
+    assert "<Patient>" in bundle_xml
+    assert '<id value="pat-bundle-1"' in bundle_xml
+    assert "<Observation>" in bundle_xml
+
+    parsed_bundle = from_xml(bundle_xml)
+    assert isinstance(parsed_bundle, Bundle)
+    assert parsed_bundle.type == "searchset"
+    parsed_resources = parsed_bundle.get_resources()
+    assert len(parsed_resources) == 2
+    assert isinstance(parsed_resources[0], Patient)
+    assert parsed_resources[0].id == "pat-bundle-1"
+    assert isinstance(parsed_resources[1], Observation)
+    assert parsed_resources[1].status == "final"
 
     print("All FHIR Lite self-checks passed successfully!")
 

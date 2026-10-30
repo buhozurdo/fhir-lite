@@ -146,3 +146,76 @@ class Observation(FHIRResource):
         if "code" not in self.data:
             errors.append("Observation requires 'code'")
         return errors
+
+
+class Bundle(FHIRResource):
+    """FHIR Bundle resource for batch, transaction, searchset, and collection interactions."""
+    resource_type = "Bundle"
+    array_fields = {"entry", "link", "identifier"}
+    VALID_TYPES = {
+        "document", "message", "transaction", "transaction-response",
+        "batch", "batch-response", "history", "searchset", "collection"
+    }
+
+    def validate(self) -> list[str]:
+        errors = super().validate()
+        b_type = self.data.get("type")
+        if not b_type:
+            errors.append("Bundle requires 'type'")
+        elif b_type not in self.VALID_TYPES:
+            errors.append(f"Invalid Bundle type '{b_type}'. Must be one of: {', '.join(sorted(self.VALID_TYPES))}")
+        return errors
+
+    @property
+    def entries(self) -> list[dict]:
+        """Returns the list of raw entry dicts."""
+        return self.data.get("entry", [])
+
+    def get_resources(self) -> list[FHIRResource]:
+        """Extract all inner entry resources as typed FHIRResource instances."""
+        resources = []
+        for entry in self.entries:
+            if isinstance(entry, dict) and "resource" in entry and isinstance(entry["resource"], dict):
+                resources.append(FHIRResource.from_dict(entry["resource"]))
+        return resources
+
+    def iter_resources(self):
+        """Generator yielding inner entry resources as typed FHIRResource instances."""
+        for entry in self.entries:
+            if isinstance(entry, dict) and "resource" in entry and isinstance(entry["resource"], dict):
+                yield FHIRResource.from_dict(entry["resource"])
+
+    def get_resources_by_type(self, resource_type: str | type[FHIRResource]) -> list[FHIRResource]:
+        """Filter inner resources by resource type name or class."""
+        type_str = resource_type if isinstance(resource_type, str) else getattr(resource_type, "resource_type", "")
+        return [r for r in self.get_resources() if r.data.get("resourceType") == type_str]
+
+    def add_entry(
+        self,
+        resource: FHIRResource | dict | None = None,
+        full_url: str | None = None,
+        request: dict | None = None,
+        response: dict | None = None,
+        search: dict | None = None,
+    ) -> dict:
+        """Helper to append an entry to the Bundle and update total."""
+        entry: dict = {}
+        if full_url:
+            entry["fullUrl"] = full_url
+        if resource is not None:
+            entry["resource"] = resource.to_dict() if isinstance(resource, FHIRResource) else dict(resource)
+        if request is not None:
+            entry["request"] = request
+        if response is not None:
+            entry["response"] = response
+        if search is not None:
+            entry["search"] = search
+
+        if "entry" not in self.data or not isinstance(self.data["entry"], list):
+            self.data["entry"] = []
+        self.data["entry"].append(entry)
+
+        if isinstance(self.data.get("total"), int):
+            self.data["total"] = len(self.data["entry"])
+        return entry
+

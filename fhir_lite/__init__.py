@@ -12,6 +12,7 @@ from .resources import (
     FHIRResource,
     Patient,
     Observation,
+    Bundle,
 )
 
 
@@ -29,6 +30,7 @@ __all__ = [
     "FHIRResource",
     "Patient",
     "Observation",
+    "Bundle",
     "from_json",
     "from_xml",
     "json_to_xml",

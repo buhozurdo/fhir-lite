@@ -43,7 +43,15 @@ def xml_to_dict(elem: ET.Element, array_fields: set | None = None) -> dict | lis
     res = {}
     for child in elem:
         child_tag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
-        child_val = xml_to_dict(child, array_fields=arrays)
+        if child_tag in ("resource", "contained") and len(child) == 1:
+            inner = child[0]
+            inner_tag = inner.tag.split("}")[-1] if "}" in inner.tag else inner.tag
+            inner_val = xml_to_dict(inner, array_fields=arrays)
+            if isinstance(inner_val, dict):
+                inner_val["resourceType"] = inner_tag
+            child_val = inner_val
+        else:
+            child_val = xml_to_dict(child, array_fields=arrays)
 
         if child_tag in res:
             if not isinstance(res[child_tag], list):
@@ -71,8 +79,14 @@ def dict_to_xml(data: dict, root_tag: str | None = None) -> ET.Element:
                 _build(parent, key, item)
         elif isinstance(value, dict):
             node = ET.SubElement(parent, f"{{{FHIR_NS}}}{key}")
-            for sub_k, sub_v in value.items():
-                _build(node, sub_k, sub_v)
+            if key in ("resource", "contained") and "resourceType" in value:
+                res_type = value["resourceType"]
+                res_node = ET.SubElement(node, f"{{{FHIR_NS}}}{res_type}")
+                for sub_k, sub_v in value.items():
+                    _build(res_node, sub_k, sub_v)
+            else:
+                for sub_k, sub_v in value.items():
+                    _build(node, sub_k, sub_v)
         else:
             if key == "div" and isinstance(value, str) and value.strip().startswith("<div"):
                 try:
