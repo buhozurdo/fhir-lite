@@ -1,6 +1,24 @@
 import json
 import xml.etree.ElementTree as ET
+from typing import Any
 from .serializer import dict_to_xml, xml_to_dict, safe_fromstring, COMMON_ARRAY_FIELDS
+
+
+def _traverse_segment(current: Any, segment: str | int) -> tuple[bool, Any]:
+    """Traverse one dictionary key or list index safely. Returns (found, value)."""
+    if isinstance(current, dict):
+        str_seg = str(segment)
+        if str_seg in current:
+            return True, current[str_seg]
+        return False, None
+    if isinstance(current, (list, tuple)):
+        try:
+            idx = int(segment)
+            if 0 <= idx < len(current):
+                return True, current[idx]
+        except (ValueError, TypeError):
+            pass
+    return False, None
 
 
 
@@ -101,6 +119,18 @@ class FHIRResource:
 
     def get(self, key: str, default=None):
         return self.data.get(key, default)
+
+    def get_path(self, path: str | list[str | int], default: Any = None) -> Any:
+        """Safely traverse deeply nested FHIR data using dot-notation or a key/index sequence."""
+        segments = path.split(".") if isinstance(path, str) else path
+        if not isinstance(segments, (list, tuple)):
+            return default
+        current: Any = self.data
+        for seg in segments:
+            found, current = _traverse_segment(current, seg)
+            if not found:
+                return default
+        return current if current is not None else default
 
     def __getitem__(self, key: str):
         return self.data[key]
@@ -449,3 +479,76 @@ class OperationOutcome(FHIRResource):
         if not issues:
             return None
         return issues[0].get("diagnostics") or issues[0].get("details", {}).get("text")
+
+
+class Reference:
+    """Helper for parsing, creating, and validating FHIR Reference strings and dictionaries."""
+    __slots__ = ("reference", "resource_type", "id", "display")
+
+    def __init__(
+        self,
+        reference: str,
+        resource_type: str | None = None,
+        id: str | None = None,
+        display: str | None = None,
+    ):
+        self.reference = reference
+        self.resource_type = resource_type
+        self.id = id
+        self.display = display
+
+    @classmethod
+    def parse(cls, reference: str | dict) -> "Reference":
+        """Parse a FHIR reference string or dictionary."""
+        display: str | None = None
+        if isinstance(reference, dict):
+            ref_str = reference.get("reference", "")
+            display = reference.get("display")
+        elif isinstance(reference, str):
+            ref_str = reference
+        else:
+            raise TypeError(f"Expected str or dict for reference, got {type(reference).__name__}")
+
+        if not ref_str:
+            return cls(reference="", display=display)
+
+        if ref_str.startswith("#"):
+            return cls(reference=ref_str, id=ref_str[1:], display=display)
+
+        clean_url = ref_str.split("?")[0].rstrip("/")
+        parts = clean_url.split("/")
+        if len(parts) >= 2 and parts[-2] and parts[-1]:
+            return cls(
+                reference=ref_str,
+                resource_type=parts[-2],
+                id=parts[-1],
+                display=display,
+            )
+
+        return cls(reference=ref_str, display=display)
+
+    @classmethod
+    def create(
+        cls,
+        resource_type: str | type[FHIRResource],
+        id: str,
+        display: str | None = None,
+    ) -> dict[str, str]:
+        """Create a standard FHIR reference dictionary."""
+        type_str = resource_type if isinstance(resource_type, str) else getattr(resource_type, "resource_type", str(resource_type))
+        ref_dict = {"reference": f"{type_str}/{id}"}
+        if display:
+            ref_dict["display"] = display
+        return ref_dict
+
+    def to_dict(self) -> dict[str, str]:
+        """Convert Reference instance to a FHIR Reference dict."""
+        out: dict[str, str] = {"reference": self.reference}
+        if self.display:
+            out["display"] = self.display
+        if self.resource_type:
+            out["type"] = self.resource_type
+        return out
+
+    def __repr__(self) -> str:
+        return f"<Reference {self.reference!r}>"

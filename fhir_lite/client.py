@@ -1,5 +1,6 @@
 import base64
 import json
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -60,9 +61,14 @@ class FHIRClient:
         headers: dict[str, str] | None = None,
         auth: tuple[str, str] | str | None = None,
         timeout: float = 30.0,
+        ssl_context: ssl.SSLContext | None = None,
+        proxy: str | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        self.ssl_context = ssl_context
+        self.proxy = proxy
+        self._opener = self._build_opener(ssl_context, proxy)
         self.headers = {
             "Accept": "application/fhir+json, application/json",
             "Content-Type": "application/fhir+json; charset=utf-8",
@@ -70,14 +76,28 @@ class FHIRClient:
         if headers:
             self.headers.update(headers)
         if auth:
-            if isinstance(auth, tuple):
-                token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
-                self.headers["Authorization"] = f"Basic {token}"
-            elif isinstance(auth, str):
-                if not auth.startswith(("Bearer ", "Basic ")):
-                    self.headers["Authorization"] = f"Bearer {auth}"
-                else:
-                    self.headers["Authorization"] = auth
+            self._setup_auth(auth)
+
+    @staticmethod
+    def _build_opener(ssl_ctx: ssl.SSLContext | None, proxy: str | None):
+        if proxy is None and ssl_ctx is None:
+            return None
+        handlers: list[urllib.request.BaseHandler] = []
+        if proxy:
+            handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy}))
+        if ssl_ctx is not None:
+            handlers.append(urllib.request.HTTPSHandler(context=ssl_ctx))
+        return urllib.request.build_opener(*handlers)
+
+    def _setup_auth(self, auth: tuple[str, str] | str) -> None:
+        if isinstance(auth, tuple):
+            token = base64.b64encode(f"{auth[0]}:{auth[1]}".encode()).decode()
+            self.headers["Authorization"] = f"Basic {token}"
+        elif isinstance(auth, str):
+            if not auth.startswith(("Bearer ", "Basic ")):
+                self.headers["Authorization"] = f"Bearer {auth}"
+            else:
+                self.headers["Authorization"] = auth
 
     def _resolve_type(self, resource_type: str | type[FHIRResource]) -> str:
         if isinstance(resource_type, str):
@@ -97,6 +117,13 @@ class FHIRClient:
         query = urllib.parse.urlencode(params, doseq=True)
         return f"{url}{separator}{query}"
 
+    def _open_request(self, req: urllib.request.Request):
+        if self._opener is not None:
+            return self._opener.open(req, timeout=self.timeout)
+        if self.ssl_context is not None:
+            return urllib.request.urlopen(req, timeout=self.timeout, context=self.ssl_context)
+        return urllib.request.urlopen(req, timeout=self.timeout)
+
     def _request(
         self,
         method: str,
@@ -115,7 +142,7 @@ class FHIRClient:
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with self._open_request(req) as resp:
                 if resp.status == 204:
                     return None
                 resp_bytes = resp.read()

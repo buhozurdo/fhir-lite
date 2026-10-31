@@ -84,6 +84,11 @@ print(patient.id)             # "pat-100"
 print(patient["gender"])      # "female"
 print(patient.is_valid)       # True
 
+# Safe deep path traversal (dot-notation or key sequences)
+print(patient.get_path("name.0.family"))               # "Smith"
+print(patient.get_path("name.0.given.0"))              # "Jane"
+print(patient.get_path("missing.field", default="N/A")) # "N/A"
+
 # Export to JSON or XML
 print(patient.to_json())
 print(patient.to_xml())
@@ -221,6 +226,25 @@ pyd_again = resource.to_pydantic(MyPatientModel)
 
 ---
 
+### 8. FHIR Reference Helpers (`Reference`)
+
+Parse and build FHIR reference strings and dictionaries with ease:
+
+```python
+from fhir_lite import Reference, Patient
+
+# Parse string, absolute URL, or dictionary
+ref = Reference.parse("Patient/12345")
+print(ref.resource_type)  # "Patient"
+print(ref.id)             # "12345"
+
+# Create valid reference dictionaries
+ref_dict = Reference.create(Patient, "12345", display="Jane Doe")
+# {"reference": "Patient/12345", "display": "Jane Doe"}
+```
+
+---
+
 ## Testing
 
 Run the included standalone test suites (no third-party test runners needed):
@@ -235,6 +259,7 @@ python -m tests.test_version
 python -m tests.test_operation_outcome
 python -m tests.test_optimization
 python -m tests.test_pydantic_interop
+python -m tests.test_reference_and_path
 ```
 
 ---

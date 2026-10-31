@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 _MOD_RESOURCES = ".resources"
 _MOD_CLIENT = ".client"
@@ -32,6 +32,7 @@ _SUBMODULE_MAP = {
     "MedicationRequest": _MOD_RESOURCES,
     "Medication": _MOD_RESOURCES,
     "OperationOutcome": _MOD_RESOURCES,
+    "Reference": _MOD_RESOURCES,
     # Client
     "FHIRClient": _MOD_CLIENT,
     "FHIRError": _MOD_CLIENT,
@@ -113,6 +114,7 @@ __all__ = [
     "MedicationRequest",
     "Medication",
     "OperationOutcome",
+    "Reference",
     # Client
     "FHIRClient",
     "FHIRError",
@@ -170,6 +172,7 @@ if TYPE_CHECKING:
         MedicationRequest,
         Medication,
         OperationOutcome,
+        Reference,
     )
     from .client import (
         FHIRClient,

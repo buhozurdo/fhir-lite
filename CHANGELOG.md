@@ -11,6 +11,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2] - 2026-10-31
+
+### Added
+- **Safe Path Traversal (`FHIRResource.get_path`):**
+  - Safely traverse deeply nested FHIR data structures using dot notation (e.g. `patient.get_path("name.0.family")`) or key sequences (`["name", 0, "family"]`).
+  - Gracefully handles missing keys, out-of-range list indices, and non-dict/list leaves, returning an optional `default` value without throwing `KeyError` or `IndexError`.
+- **FHIR Reference Parsing & Creation Helper (`Reference`):**
+  - `Reference.parse()` for parsing relative reference strings (`Patient/123`), absolute URLs (`https://hapi.fhir.org/.../Patient/123`), fragment references (`#contained`), or reference dictionaries (`{"reference": ..., "display": ...}`).
+  - `Reference.create()` for generating valid FHIR reference dictionaries from resource types and IDs.
+  - Exported at top-level package namespace with lazy-loading support.
+- **Enterprise SSL & Proxy Support in `FHIRClient`:**
+  - Added `ssl_context: ssl.SSLContext | None = None` support for corporate intranets, self-signed certificates, and mutual TLS (mTLS).
+  - Added `proxy: str | None = None` support for HTTP/HTTPS proxy routing via `urllib.request.ProxyHandler`.
+
+---
+
 ## [0.1.1] - 2026-10-30
 
 ### Added
@@ -70,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Suites:**
   - 9 standalone test suites covering security, serialization, streaming, typing, versions, optimization, and client without external dependencies.
 
-[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BuhoZurdo/fhir-lite/releases/tag/v0.1.0

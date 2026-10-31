@@ -206,6 +206,22 @@ def test_fhir_client():
     except ValueError as err:
         assert "transaction" in str(err)
 
+    # 11. Test ssl_context and proxy configuration
+    import ssl
+    dummy_ctx = ssl.create_default_context()
+    client_ssl = FHIRClient(base_url="https://fhir.example.com", ssl_context=dummy_ctx)
+    assert client_ssl.ssl_context is dummy_ctx
+    assert client_ssl._opener is not None
+
+    client_proxy = FHIRClient(base_url="https://fhir.example.com", proxy="http://proxy.hospital.org:8080")
+    assert client_proxy.proxy == "http://proxy.hospital.org:8080"
+    assert client_proxy._opener is not None
+
+    # Test open_request with mocked opener
+    with patch.object(client_ssl._opener, "open", return_value=_mock_response(200, mock_patient_payload)):
+        pat = client_ssl.read(Patient, "123")
+        assert pat.id == "123"
+
     print("All FHIRClient tests passed successfully!")
 
 
