@@ -17,6 +17,32 @@ class FHIRError(Exception):
         self.outcome: OperationOutcome | None = outcome
 
 
+def _encode_body(data: dict | FHIRResource | None) -> bytes | None:
+    if data is None:
+        return None
+    raw = data.to_dict() if isinstance(data, FHIRResource) else data
+    return json.dumps(raw, ensure_ascii=False).encode("utf-8")
+
+
+def _parse_error_outcome(err: urllib.error.HTTPError) -> tuple[str, OperationOutcome | None]:
+    err_body = err.read().decode("utf-8") if err.fp else ""
+    if not err_body:
+        return str(err.reason), None
+
+    try:
+        raw = json.loads(err_body)
+        if isinstance(raw, dict):
+            if raw.get("resourceType") == "OperationOutcome":
+                return err_body, OperationOutcome(raw)
+            return err_body, OperationOutcome({
+                "resourceType": "OperationOutcome",
+                "issue": [{"severity": "error", "code": "processing", "diagnostics": err_body}],
+            })
+    except Exception:
+        pass
+    return err_body or str(err.reason), None
+
+
 class FHIRClient:
     """Ultra-lightweight zero-dependency REST client for FHIR servers using urllib."""
 
@@ -50,6 +76,13 @@ class FHIRClient:
             return resource_type
         return getattr(resource_type, "resource_type", str(resource_type))
 
+    def _build_url(self, path: str, params: dict[str, Any] | None) -> str:
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        if not params:
+            return url
+        query = urllib.parse.urlencode(params, doseq=True)
+        return f"{url}?{query}"
+
     def _request(
         self,
         method: str,
@@ -57,15 +90,8 @@ class FHIRClient:
         data: dict | FHIRResource | None = None,
         params: dict[str, Any] | None = None,
     ) -> dict | None:
-        url = f"{self.base_url}/{path.lstrip('/')}"
-        if params:
-            query = urllib.parse.urlencode(params, doseq=True)
-            url = f"{url}?{query}"
-
-        body_bytes = None
-        if data is not None:
-            raw = data.to_dict() if isinstance(data, FHIRResource) else data
-            body_bytes = json.dumps(raw, ensure_ascii=False).encode("utf-8")
+        url = self._build_url(path, params)
+        body_bytes = _encode_body(data)
 
         req = urllib.request.Request(
             url=url,
@@ -76,25 +102,13 @@ class FHIRClient:
 
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                status = resp.status
-                if status == 204:
+                if resp.status == 204:
                     return None
                 resp_bytes = resp.read()
-                if not resp_bytes:
-                    return None
-                return json.loads(resp_bytes.decode("utf-8"))
+                return json.loads(resp_bytes.decode("utf-8")) if resp_bytes else None
         except urllib.error.HTTPError as err:
-            err_body = err.read().decode("utf-8") if err.fp else ""
-            outcome: OperationOutcome | None = None
-            try:
-                raw = json.loads(err_body)
-                if isinstance(raw, dict) and raw.get("resourceType") == "OperationOutcome":
-                    outcome = OperationOutcome(raw)
-                elif isinstance(raw, dict):
-                    outcome = OperationOutcome({"resourceType": "OperationOutcome", "issue": [{"severity": "error", "code": "processing", "diagnostics": err_body}]})
-            except Exception:
-                pass
-            raise FHIRError(err.code, err_body or err.reason, outcome=outcome) from err
+            err_msg, outcome = _parse_error_outcome(err)
+            raise FHIRError(err.code, err_msg, outcome=outcome) from err
 
     def read(self, resource_type: str | type[T], id: str) -> T:
         """Fetch a specific resource by ID: GET [base]/[resourceType]/[id]."""
