@@ -27,13 +27,19 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          python -m pytest --cov=fhir_lite --cov-report=xml
+          python -m pytest --cov=fhir_lite --cov-report=xml --junitxml=junit.xml
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: buhozurdo/fhir-lite
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Cache SonarQube packages
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
