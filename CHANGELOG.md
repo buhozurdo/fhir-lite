@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **FHIR Search Pagination & Link Navigation:**
+  - `Bundle.get_link(relation)`, `Bundle.next_url`, and `Bundle.prev_url` helper properties for parsing FHIR `link` arrays (supports both `previous` and `prev` relations).
+  - `FHIRClient.next_page(bundle)` and `FHIRClient.prev_page(bundle)` to follow searchset pagination links transparently.
+  - `FHIRClient.iter_search(resource_type, max_pages=None, **params)` generator to stream and yield resources seamlessly across multiple paginated pages.
+- **FHIR Batch & Transaction Operations:**
+  - `FHIRClient.transaction(bundle)` and `FHIRClient.batch(bundle)` to execute atomic operations via `POST [base]`.
+  - Type validation verifying that incoming bundles match the expected `transaction` or `batch` type before submission.
+
 ---
 
 ## [0.1.0] - 2026-10-30

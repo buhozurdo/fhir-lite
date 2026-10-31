@@ -8,6 +8,14 @@ from .resources import FHIRResource, Bundle, OperationOutcome
 
 T = TypeVar("T", bound=FHIRResource)
 
+METHOD_GET = "GET"
+METHOD_POST = "POST"
+METHOD_PUT = "PUT"
+METHOD_DELETE = "DELETE"
+
+BUNDLE_TYPE_TRANSACTION = "transaction"
+BUNDLE_TYPE_BATCH = "batch"
+
 
 class FHIRError(Exception):
     """Raised when a FHIR server responds with an HTTP error or OperationOutcome."""
@@ -77,11 +85,17 @@ class FHIRClient:
         return getattr(resource_type, "resource_type", str(resource_type))
 
     def _build_url(self, path: str, params: dict[str, Any] | None) -> str:
-        url = f"{self.base_url}/{path.lstrip('/')}"
+        if path.startswith(("http://", "https://")):
+            url = path
+        elif not path or path == "/":
+            url = self.base_url
+        else:
+            url = f"{self.base_url}/{path.lstrip('/')}"
         if not params:
             return url
+        separator = "&" if "?" in url else "?"
         query = urllib.parse.urlencode(params, doseq=True)
-        return f"{url}?{query}"
+        return f"{url}{separator}{query}"
 
     def _request(
         self,
@@ -113,7 +127,7 @@ class FHIRClient:
     def read(self, resource_type: str | type[T], id: str) -> T:
         """Fetch a specific resource by ID: GET [base]/[resourceType]/[id]."""
         res_type = self._resolve_type(resource_type)
-        data = self._request("GET", f"{res_type}/{id}")
+        data = self._request(METHOD_GET, f"{res_type}/{id}")
         if data is None:
             raise FHIRError(404, f"Resource {res_type}/{id} returned empty content")
         return FHIRResource.from_dict(data)
@@ -121,10 +135,43 @@ class FHIRClient:
     def search(self, resource_type: str | type[FHIRResource], **params) -> Bundle:
         """Search resources with query parameters: GET [base]/[resourceType]?params..."""
         res_type = self._resolve_type(resource_type)
-        data = self._request("GET", res_type, params=params)
+        data = self._request(METHOD_GET, res_type, params=params)
         if data is None:
             return Bundle(type="searchset", total=0, entry=[])
         return Bundle(data)
+
+    def next_page(self, bundle: Bundle) -> Bundle | None:
+        """Fetch the next page of a searchset bundle using its 'next' link."""
+        url = bundle.next_url
+        if not url:
+            return None
+        data = self._request(METHOD_GET, url)
+        return Bundle(data) if data else None
+
+    def prev_page(self, bundle: Bundle) -> Bundle | None:
+        """Fetch the previous page of a searchset bundle using its 'previous' or 'prev' link."""
+        url = bundle.prev_url
+        if not url:
+            return None
+        data = self._request(METHOD_GET, url)
+        return Bundle(data) if data else None
+
+    def iter_search(
+        self,
+        resource_type: str | type[FHIRResource],
+        max_pages: int | None = None,
+        **params,
+    ):
+        """Generator yielding resources across all paginated search pages."""
+        current_bundle: Bundle | None = self.search(resource_type, **params)
+        page_count = 0
+
+        while current_bundle is not None:
+            yield from current_bundle.iter_resources()
+            page_count += 1
+            if max_pages is not None and page_count >= max_pages:
+                break
+            current_bundle = self.next_page(current_bundle)
 
     def create(self, resource: FHIRResource | dict) -> FHIRResource:
         """Create a resource on the server: POST [base]/[resourceType]."""
@@ -132,7 +179,7 @@ class FHIRClient:
         res_type = data.get("resourceType")
         if not res_type:
             raise ValueError("Resource must have 'resourceType' to create")
-        resp_data = self._request("POST", res_type, data=data)
+        resp_data = self._request(METHOD_POST, res_type, data=data)
         if resp_data is None:
             return FHIRResource.from_dict(data)
         return FHIRResource.from_dict(resp_data)
@@ -144,7 +191,7 @@ class FHIRClient:
         res_id = data.get("id")
         if not res_type or not res_id:
             raise ValueError("Resource must have 'resourceType' and 'id' to update")
-        resp_data = self._request("PUT", f"{res_type}/{res_id}", data=data)
+        resp_data = self._request(METHOD_PUT, f"{res_type}/{res_id}", data=data)
         if resp_data is None:
             return FHIRResource.from_dict(data)
         return FHIRResource.from_dict(resp_data)
@@ -152,5 +199,25 @@ class FHIRClient:
     def delete(self, resource_type: str | type[FHIRResource], id: str) -> bool:
         """Delete a resource by ID: DELETE [base]/[resourceType]/[id]."""
         res_type = self._resolve_type(resource_type)
-        self._request("DELETE", f"{res_type}/{id}")
+        self._request(METHOD_DELETE, f"{res_type}/{id}")
         return True
+
+    def _send_bundle(self, bundle: Bundle | dict, expected_type: str) -> Bundle:
+        data = bundle.to_dict() if isinstance(bundle, FHIRResource) else dict(bundle)
+        b_type = data.get("type")
+        if b_type and b_type != expected_type:
+            raise ValueError(f"Bundle type must be '{expected_type}', got '{b_type}'")
+        data["resourceType"] = "Bundle"
+        data["type"] = expected_type
+        resp = self._request(METHOD_POST, "", data=data)
+        if resp is None:
+            return Bundle(type=f"{expected_type}-response", entry=[])
+        return Bundle(resp)
+
+    def transaction(self, bundle: Bundle | dict) -> Bundle:
+        """Execute a FHIR transaction bundle: POST [base]."""
+        return self._send_bundle(bundle, expected_type=BUNDLE_TYPE_TRANSACTION)
+
+    def batch(self, bundle: Bundle | dict) -> Bundle:
+        """Execute a FHIR batch bundle: POST [base]."""
+        return self._send_bundle(bundle, expected_type=BUNDLE_TYPE_BATCH)

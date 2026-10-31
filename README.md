@@ -174,6 +174,19 @@ bundle = client.search(Patient, family="Smith", _count=20)
 for pat in bundle.get_resources():
     print(pat.id)
 
+# Automatic multi-page search iterator (follows bundle.link 'next')
+for pat in client.iter_search(Patient, family="Smith", max_pages=5):
+    print(pat.id)
+
+# Manual page navigation
+if bundle.next_url:
+    next_bundle = client.next_page(bundle)
+
+# Atomic Transactions & Batches (POST [base])
+tx = Bundle(type="transaction")
+tx.add_entry(resource=new_patient, request={"method": "POST", "url": "Patient"})
+tx_response = client.transaction(tx)
+
 # Create / Update / Delete
 new_patient = client.create(Patient(gender="female", active=True))
 client.delete(Patient, new_patient.id)

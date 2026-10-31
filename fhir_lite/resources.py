@@ -205,6 +205,27 @@ class Bundle(FHIRResource):
         """Returns the list of raw entry dicts."""
         return self.data.get("entry", [])
 
+    def get_link(self, relation: str) -> str | None:
+        """Find the URL for a specific link relation (e.g. 'next', 'previous', 'self')."""
+        links = self.data.get("link", [])
+        if not isinstance(links, list):
+            return None
+        target = ("previous", "prev") if relation in ("previous", "prev") else (relation,)
+        for item in links:
+            if isinstance(item, dict) and item.get("relation") in target:
+                return item.get("url")
+        return None
+
+    @property
+    def next_url(self) -> str | None:
+        """Returns the URL of the 'next' link in the Bundle, if present."""
+        return self.get_link("next")
+
+    @property
+    def prev_url(self) -> str | None:
+        """Returns the URL of the 'previous' or 'prev' link in the Bundle, if present."""
+        return self.get_link("previous")
+
     def get_resources(self) -> list[FHIRResource]:
         """Extract all inner entry resources as typed FHIRResource instances."""
         resources = []
