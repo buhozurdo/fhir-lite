@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [0.1.1] - 2026-10-30
+
 ### Added
 - **FHIR Search Pagination & Link Navigation:**
   - `Bundle.get_link(relation)`, `Bundle.next_url`, and `Bundle.prev_url` helper properties for parsing FHIR `link` arrays (supports both `previous` and `prev` relations).
@@ -66,5 +70,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Suites:**
   - 9 standalone test suites covering security, serialization, streaming, typing, versions, optimization, and client without external dependencies.
 
-[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BuhoZurdo/fhir-lite/releases/tag/v0.1.0
