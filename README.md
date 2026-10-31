@@ -2,6 +2,7 @@
 
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(stdlib%20only)-success.svg)]()
+[![codecov](https://codecov.io/gh/buhozurdo/fhir-lite/branch/main/graph/badge.svg)](https://codecov.io/gh/buhozurdo/fhir-lite)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)]()
 
 **FHIR Lite** is an ultra-lightweight, zero-dependency Python library designed to parse, modify, validate, and convert medical resources under the **HL7 FHIR (Fast Healthcare Interoperability Resources)** standard.
