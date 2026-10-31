@@ -6,6 +6,7 @@ from .serializer import dict_to_xml, xml_to_dict, safe_fromstring, COMMON_ARRAY_
 
 class FHIRResource:
     """Base FHIR resource class with dictionary-like access and bidirectional serialization."""
+    __slots__ = ("data",)
     _registry: dict[str, type["FHIRResource"]] = {}
     resource_type: str = "Resource"
     array_fields: set[str] = set()
@@ -42,6 +43,35 @@ class FHIRResource:
         data = parsed if isinstance(parsed, dict) else {}
         data["resourceType"] = res_type
         return target_cls(data)
+
+    @classmethod
+    def from_pydantic(cls, model_instance) -> "FHIRResource":
+        """Instantiate a FHIRResource from a Pydantic model (compatible with v1 or v2).
+        
+        Extracts raw dictionary representation and polymorphically returns
+        the registered resource subclass if applicable.
+        """
+        if hasattr(model_instance, "model_dump"):
+            data = model_instance.model_dump(exclude_unset=False, by_alias=True)
+        elif hasattr(model_instance, "dict"):
+            data = model_instance.dict(by_alias=True)
+        else:
+            raise TypeError(
+                f"Expected Pydantic model instance with 'model_dump()' or 'dict()', got {type(model_instance).__name__}"
+            )
+        return cls.from_dict(data)
+
+    def to_pydantic(self, model_cls: type):
+        """Convert this resource to an instance of the given Pydantic model class (v1 or v2)."""
+        if hasattr(model_cls, "model_validate"):
+            return model_cls.model_validate(self.data)
+        elif hasattr(model_cls, "parse_obj"):
+            return model_cls.parse_obj(self.data)
+        else:
+            try:
+                return model_cls(**self.data)
+            except Exception as e:
+                raise ValueError(f"Failed to instantiate {model_cls.__name__} from resource data: {e}") from e
 
     def to_dict(self) -> dict:
         return dict(self.data)
@@ -92,9 +122,9 @@ class FHIRResource:
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
     def __setattr__(self, name: str, value):
-        if name in ("data",):
+        if name == "data":
             super().__setattr__(name, value)
-        elif hasattr(self, "data") and name in self.data:
+        elif hasattr(self, "data"):
             self.data[name] = value
         else:
             super().__setattr__(name, value)
@@ -106,6 +136,7 @@ class FHIRResource:
 
 class Patient(FHIRResource):
     """FHIR Patient resource."""
+    __slots__ = ()
     resource_type = "Patient"
     array_fields = {
         "identifier", "name", "telecom", "address", "contact",
@@ -126,6 +157,7 @@ class Patient(FHIRResource):
 
 class Observation(FHIRResource):
     """FHIR Observation resource."""
+    __slots__ = ()
     resource_type = "Observation"
     array_fields = {
         "identifier", "basedOn", "partOf", "category", "focus",
@@ -151,6 +183,7 @@ class Observation(FHIRResource):
 
 class Bundle(FHIRResource):
     """FHIR Bundle resource for batch, transaction, searchset, and collection interactions."""
+    __slots__ = ()
     resource_type = "Bundle"
     array_fields = {"entry", "link", "identifier"}
     VALID_TYPES = {
@@ -223,6 +256,7 @@ class Bundle(FHIRResource):
 
 class Practitioner(FHIRResource):
     """FHIR Practitioner resource for healthcare providers."""
+    __slots__ = ()
     resource_type = "Practitioner"
     array_fields = {
         "identifier", "name", "telecom", "address", "gender",
@@ -243,6 +277,7 @@ class Practitioner(FHIRResource):
 
 class Encounter(FHIRResource):
     """FHIR Encounter resource for healthcare interactions."""
+    __slots__ = ()
     resource_type = "Encounter"
     array_fields = {
         "identifier", "statusHistory", "type", "serviceType",
@@ -269,6 +304,7 @@ class Encounter(FHIRResource):
 
 class Condition(FHIRResource):
     """FHIR Condition resource for diagnoses, problems, and health concerns."""
+    __slots__ = ()
     resource_type = "Condition"
     array_fields = {
         "identifier", "category", "bodySite", "evidence", "note", "stage"
@@ -283,6 +319,7 @@ class Condition(FHIRResource):
 
 class MedicationRequest(FHIRResource):
     """FHIR MedicationRequest resource for prescriptions and medication orders."""
+    __slots__ = ()
     resource_type = "MedicationRequest"
     array_fields = {
         "identifier", "basedOn", "priorPrescription", "category",
@@ -318,6 +355,7 @@ class MedicationRequest(FHIRResource):
 
 class Medication(FHIRResource):
     """FHIR Medication resource for drug definitions and ingredients."""
+    __slots__ = ()
     resource_type = "Medication"
     array_fields = {"identifier", "ingredient", "extension"}
     VALID_STATUSES = {"active", "inactive", "entered-in-error"}
@@ -332,6 +370,7 @@ class Medication(FHIRResource):
 
 class OperationOutcome(FHIRResource):
     """FHIR OperationOutcome resource for operation results and error details."""
+    __slots__ = ()
     resource_type = "OperationOutcome"
     array_fields = {"issue"}
 

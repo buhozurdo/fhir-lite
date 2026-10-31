@@ -181,6 +181,33 @@ client.delete(Patient, new_patient.id)
 
 ---
 
+### 7. Optional Pydantic Interoperability (Soft Dependency)
+
+`fhir-lite` has **zero required dependencies**, but if you or your framework (e.g., FastAPI) uses **Pydantic** (v1 or v2), you can seamlessly convert models back and forth:
+
+```python
+from pydantic import BaseModel
+from fhir_lite import FHIRResource
+
+class MyPatientModel(BaseModel):
+    resourceType: str = "Patient"
+    id: str
+    active: bool = True
+    gender: str
+
+# 1. Convert any Pydantic model into a typed FHIRResource
+pyd_patient = MyPatientModel(id="pat-pyd-1", gender="female")
+resource = FHIRResource.from_pydantic(pyd_patient)
+
+# Now enjoy all fhir-lite features: lossless XML conversion, validation, NDJSON streaming
+xml_data = resource.to_xml()
+
+# 2. Convert a FHIRResource back into your Pydantic model
+pyd_again = resource.to_pydantic(MyPatientModel)
+```
+
+---
+
 ## Testing
 
 Run the included standalone test suites (no third-party test runners needed):
@@ -193,6 +220,8 @@ python -m tests.test_client
 python -m tests.test_typing
 python -m tests.test_version
 python -m tests.test_operation_outcome
+python -m tests.test_optimization
+python -m tests.test_pydantic_interop
 ```
 
 ---

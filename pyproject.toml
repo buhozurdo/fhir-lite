@@ -28,6 +28,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+pydantic = ["pydantic>=2.0"]
+
 [project.urls]
 Homepage = "https://github.com/BuhoZurdo/fhir-lite"
 Repository = "https://github.com/BuhoZurdo/fhir-lite.git"
@@ -36,6 +39,7 @@ Repository = "https://github.com/BuhoZurdo/fhir-lite.git"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["fhir_lite*"]
+exclude = ["tests*", "tasks*", "brain*"]
 
 [tool.setuptools.package-data]
 fhir_lite = ["py.typed"]
