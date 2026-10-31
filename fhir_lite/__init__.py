@@ -12,58 +12,65 @@ from typing import TYPE_CHECKING
 
 __version__ = "0.1.0"
 
+_MOD_RESOURCES = ".resources"
+_MOD_CLIENT = ".client"
+_MOD_SERIALIZER = ".serializer"
+_MOD_NDJSON = ".ndjson"
+_MOD_TYPES = ".types"
+_MOD_VERSION = ".version"
+
 # Mapping from public symbols to their internal modules for lazy loading
 _SUBMODULE_MAP = {
     # Resources
-    "FHIRResource": ".resources",
-    "Patient": ".resources",
-    "Observation": ".resources",
-    "Bundle": ".resources",
-    "Practitioner": ".resources",
-    "Encounter": ".resources",
-    "Condition": ".resources",
-    "MedicationRequest": ".resources",
-    "Medication": ".resources",
-    "OperationOutcome": ".resources",
+    "FHIRResource": _MOD_RESOURCES,
+    "Patient": _MOD_RESOURCES,
+    "Observation": _MOD_RESOURCES,
+    "Bundle": _MOD_RESOURCES,
+    "Practitioner": _MOD_RESOURCES,
+    "Encounter": _MOD_RESOURCES,
+    "Condition": _MOD_RESOURCES,
+    "MedicationRequest": _MOD_RESOURCES,
+    "Medication": _MOD_RESOURCES,
+    "OperationOutcome": _MOD_RESOURCES,
     # Client
-    "FHIRClient": ".client",
-    "FHIRError": ".client",
+    "FHIRClient": _MOD_CLIENT,
+    "FHIRError": _MOD_CLIENT,
     # Serializer
-    "json_to_xml": ".serializer",
-    "xml_to_json": ".serializer",
-    "dict_to_xml": ".serializer",
-    "xml_to_dict": ".serializer",
-    "safe_fromstring": ".serializer",
+    "json_to_xml": _MOD_SERIALIZER,
+    "xml_to_json": _MOD_SERIALIZER,
+    "dict_to_xml": _MOD_SERIALIZER,
+    "xml_to_dict": _MOD_SERIALIZER,
+    "safe_fromstring": _MOD_SERIALIZER,
     # NDJSON
-    "iter_ndjson": ".ndjson",
-    "write_ndjson": ".ndjson",
-    "loads_ndjson": ".ndjson",
-    "dumps_ndjson": ".ndjson",
+    "iter_ndjson": _MOD_NDJSON,
+    "write_ndjson": _MOD_NDJSON,
+    "loads_ndjson": _MOD_NDJSON,
+    "dumps_ndjson": _MOD_NDJSON,
     # TypedDicts (fhir_lite.types)
-    "ExtensionDict": ".types",
-    "CodingDict": ".types",
-    "CodeableConceptDict": ".types",
-    "ReferenceDict": ".types",
-    "QuantityDict": ".types",
-    "PeriodDict": ".types",
-    "IdentifierDict": ".types",
-    "HumanNameDict": ".types",
-    "ContactPointDict": ".types",
-    "AddressDict": ".types",
-    "MetaDict": ".types",
-    "BundleEntryDict": ".types",
-    "BundleEntryRequestDict": ".types",
-    "BundleEntryResponseDict": ".types",
-    "DosageDict": ".types",
-    "NarrativeDict": ".types",
-    "IssueDict": ".types",
+    "ExtensionDict": _MOD_TYPES,
+    "CodingDict": _MOD_TYPES,
+    "CodeableConceptDict": _MOD_TYPES,
+    "ReferenceDict": _MOD_TYPES,
+    "QuantityDict": _MOD_TYPES,
+    "PeriodDict": _MOD_TYPES,
+    "IdentifierDict": _MOD_TYPES,
+    "HumanNameDict": _MOD_TYPES,
+    "ContactPointDict": _MOD_TYPES,
+    "AddressDict": _MOD_TYPES,
+    "MetaDict": _MOD_TYPES,
+    "BundleEntryDict": _MOD_TYPES,
+    "BundleEntryRequestDict": _MOD_TYPES,
+    "BundleEntryResponseDict": _MOD_TYPES,
+    "DosageDict": _MOD_TYPES,
+    "NarrativeDict": _MOD_TYPES,
+    "IssueDict": _MOD_TYPES,
     # Version API (fhir_lite.version)
-    "FHIRVersion": ".version",
-    "get_fhir_version": ".version",
-    "set_fhir_version": ".version",
-    "fhir_version_context": ".version",
-    "normalize_field": ".version",
-    "get_version_info": ".version",
+    "FHIRVersion": _MOD_VERSION,
+    "get_fhir_version": _MOD_VERSION,
+    "set_fhir_version": _MOD_VERSION,
+    "fhir_version_context": _MOD_VERSION,
+    "normalize_field": _MOD_VERSION,
+    "get_version_info": _MOD_VERSION,
 }
 
 

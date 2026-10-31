@@ -1,4 +1,12 @@
-import pytest  # optional, but we write assert-based runner so standard python works
+try:
+    import pytest
+except ImportError:
+    class _PytestFallback:
+        @staticmethod
+        def fail(msg: str):
+            raise AssertionError(msg)
+    pytest = _PytestFallback()
+
 from fhir_lite import from_xml, xml_to_json, safe_fromstring
 
 
@@ -15,13 +23,13 @@ def test_xml_security_hardening():
 
     try:
         from_xml(malicious_doctype)
-        assert False, "Should have rejected XML with DOCTYPE"
+        pytest.fail("Should have rejected XML with DOCTYPE")
     except ValueError as err:
         assert "forbidden" in str(err).lower()
 
     try:
         xml_to_json(malicious_doctype)
-        assert False, "xml_to_json should have rejected XML with DOCTYPE"
+        pytest.fail("xml_to_json should have rejected XML with DOCTYPE")
     except ValueError as err:
         assert "forbidden" in str(err).lower()
 
@@ -33,7 +41,7 @@ def test_xml_security_hardening():
     </Observation>"""
     try:
         safe_fromstring(xxe_payload)
-        assert False, "Should have rejected XXE payload"
+        pytest.fail("Should have rejected XXE payload")
     except ValueError as err:
         assert "forbidden" in str(err).lower()
 
@@ -42,7 +50,7 @@ def test_xml_security_hardening():
     <Bundle xmlns="http://hl7.org/fhir"><type value="searchset"/></Bundle>"""
     try:
         safe_fromstring(param_payload)
-        assert False, "Should have rejected parameter entity payload"
+        pytest.fail("Should have rejected parameter entity payload")
     except ValueError as err:
         assert "forbidden" in str(err).lower()
 
