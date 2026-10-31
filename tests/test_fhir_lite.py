@@ -16,7 +16,7 @@ from fhir_lite import (
 )
 
 
-def run_tests():
+def test_core_suite():
     # 1. Bidirectional JSON <-> XML
     sample_json = """{
   "resourceType": "Patient",
@@ -239,4 +239,4 @@ def run_tests():
 
 
 if __name__ == "__main__":
-    run_tests()
+    test_core_suite()
