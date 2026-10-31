@@ -43,3 +43,7 @@ exclude = ["tests*", "tasks*", "brain*"]
 
 [tool.setuptools.package-data]
 fhir_lite = ["py.typed"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
