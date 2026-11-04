@@ -11,6 +11,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.3.0] - 2026-11-03
+
+### Added
+- **Enterprise FHIR REST Client Enhancements:**
+  - Automatic multi-page search iterator (`FHIRClient.iter_search()`) and page navigation (`next_page()`, `prev_page()`).
+  - Bundle link parsing helpers (`Bundle.next_url`, `Bundle.prev_url`, and `Bundle.get_link()`).
+  - Atomic transactions and batch operations (`FHIRClient.transaction()` and `FHIRClient.batch()`).
+  - Network hardening with custom SSL context (`ssl_context`) and HTTP/HTTPS proxy support.
+- **Safe Deep Path Traversal:**
+  - `FHIRResource.get_path()` for safe navigation of deeply nested FHIR data with dot notation or key sequences without `KeyError` or `IndexError`.
+- **FHIR Reference Helpers:**
+  - `Reference.parse()` and `Reference.create()` for handling relative, absolute, and contained reference identifiers.
+- **CI/CD & Code Quality Automation:**
+  - SonarQube Cloud scanning with automated test coverage reporting (>91% coverage).
+  - Codecov test results and coverage reporting (`codecov-action@v5` and `test-results-action@v1`).
+  - Automated PyPI publishing pipeline via GitHub Actions using OpenID Connect (OIDC) Trusted Publishing.
+
+---
+
 ## [0.1.2] - 2026-10-31
 
 ### Added
@@ -86,7 +105,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Suites:**
   - 9 standalone test suites covering security, serialization, streaming, typing, versions, optimization, and client without external dependencies.
 
-[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.2...v0.3.0
 [0.1.2]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/BuhoZurdo/fhir-lite/releases/tag/v0.1.0
