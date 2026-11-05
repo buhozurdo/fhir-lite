@@ -11,6 +11,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-11-04
+
+### Added
+- **Intelligent Client Retries with Exponential Backoff & Jitter:**
+  - `FHIRClient(max_retries=3, backoff_factor=0.5)` with automatic retry on `429 Too Many Requests`, `502`, `503`, and `504`.
+  - Automatic inspection and adherence to standard HTTP `Retry-After` header seconds.
+- **FHIR Conditional Create & Idempotency:**
+  - `FHIRClient.create(resource, if_none_exist="...")` supporting standard FHIR `If-None-Exist` headers.
+  - High-level `FHIRClient.get_or_create(resource, **search_params)` returning `(resource, created_bool)`.
+- **FHIR JSON Patch:**
+  - `FHIRClient.patch(resource_type, id, operations)` for atomic partial resource updates via `application/json-patch+json`.
+- **Semantic Extractors for Identifiers and Medical Codes:**
+  - `FHIRResource.get_identifier(system=..., type_code=...)` for instant extraction without manual array looping.
+  - `FHIRResource.get_coding(system=..., field="code")` for extracting codes from `CodeableConcept` and `Coding` structures.
+- **Fluent Transaction & Batch Builders:**
+  - `Bundle.transaction(*entries)` and `Bundle.batch(*entries)`.
+  - Fluent interaction helpers `Bundle.add_create()`, `Bundle.add_update()`, and `Bundle.add_delete()`.
+
+---
+
 ## [0.3.0] - 2026-11-03
 
 ### Added
@@ -105,7 +125,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Suites:**
   - 9 standalone test suites covering security, serialization, streaming, typing, versions, optimization, and client without external dependencies.
 
-[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.2...v0.3.0
 [0.1.2]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.0...v0.1.1

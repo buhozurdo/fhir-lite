@@ -21,6 +21,34 @@ def _traverse_segment(current: Any, segment: str | int) -> tuple[bool, Any]:
     return False, None
 
 
+def _match_identifier(item: dict, system: str | None, type_code: str | None) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if system is not None and item.get("system") != system:
+        return False
+    if type_code is not None:
+        type_dict = item.get("type")
+        codings = type_dict.get("coding", []) if isinstance(type_dict, dict) else []
+        if not any(isinstance(c, dict) and c.get("code") == type_code for c in codings):
+            return False
+    return True
+
+
+def _extract_codings(val: Any) -> list[dict]:
+    if isinstance(val, dict):
+        codings = val.get("coding", [])
+        return codings if isinstance(codings, list) else []
+    if isinstance(val, list):
+        out = []
+        for elem in val:
+            if isinstance(elem, dict):
+                codings = elem.get("coding", [])
+                if isinstance(codings, list):
+                    out.extend(codings)
+        return out
+    return []
+
+
 
 class FHIRResource:
     """Base FHIR resource class with dictionary-like access and bidirectional serialization."""
@@ -131,6 +159,25 @@ class FHIRResource:
             if not found:
                 return default
         return current if current is not None else default
+
+    def get_identifier(self, system: str | None = None, type_code: str | None = None) -> str | None:
+        """Extract the identifier value matching an optional system URI or type code."""
+        identifiers = self.data.get("identifier", [])
+        if not isinstance(identifiers, list):
+            return None
+        for item in identifiers:
+            if _match_identifier(item, system, type_code):
+                return item.get("value")
+        return None
+
+    def get_coding(self, system: str | None = None, field: str = "code") -> str | None:
+        """Extract a medical code from a CodeableConcept or Coding field (e.g. 'code', 'category')."""
+        val = self.data.get(field)
+        codings = _extract_codings(val)
+        for c in codings:
+            if isinstance(c, dict) and (system is None or c.get("system") == system):
+                return c.get("code")
+        return None
 
     def __getitem__(self, key: str):
         return self.data[key]
@@ -303,6 +350,46 @@ class Bundle(FHIRResource):
         if isinstance(self.data.get("total"), int):
             self.data["total"] = len(self.data["entry"])
         return entry
+
+    @classmethod
+    def transaction(cls, *entries) -> "Bundle":
+        """Create a new transaction Bundle pre-configured with type='transaction'."""
+        b = cls(type="transaction", entry=[])
+        for entry in entries:
+            if isinstance(entry, (dict, FHIRResource)):
+                b.add_create(entry)
+        return b
+
+    @classmethod
+    def batch(cls, *entries) -> "Bundle":
+        """Create a new batch Bundle pre-configured with type='batch'."""
+        b = cls(type="batch", entry=[])
+        for entry in entries:
+            if isinstance(entry, (dict, FHIRResource)):
+                b.add_create(entry)
+        return b
+
+    def add_create(self, resource: FHIRResource | dict, full_url: str | None = None) -> dict:
+        """Helper to append a POST (create) interaction entry to the Bundle."""
+        data = resource.to_dict() if isinstance(resource, FHIRResource) else resource
+        res_type = data.get("resourceType", "")
+        if not res_type:
+            raise ValueError("Resource must have a 'resourceType' to add as create interaction")
+        return self.add_entry(resource=data, full_url=full_url, request={"method": "POST", "url": res_type})
+
+    def add_update(self, resource: FHIRResource | dict, full_url: str | None = None) -> dict:
+        """Helper to append a PUT (update) interaction entry to the Bundle."""
+        data = resource.to_dict() if isinstance(resource, FHIRResource) else resource
+        res_type = data.get("resourceType", "")
+        res_id = data.get("id", "")
+        if not res_type or not res_id:
+            raise ValueError("Resource must have 'resourceType' and 'id' to add as update interaction")
+        return self.add_entry(resource=data, full_url=full_url, request={"method": "PUT", "url": f"{res_type}/{res_id}"})
+
+    def add_delete(self, resource_type: str | type[FHIRResource], id: str) -> dict:
+        """Helper to append a DELETE interaction entry to the Bundle."""
+        type_str = resource_type if isinstance(resource_type, str) else getattr(resource_type, "resource_type", str(resource_type))
+        return self.add_entry(request={"method": "DELETE", "url": f"{type_str}/{id}"})
 
 
 class Practitioner(FHIRResource):

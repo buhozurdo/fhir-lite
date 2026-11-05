@@ -90,6 +90,10 @@ print(patient.get_path("name.0.family"))               # "Smith"
 print(patient.get_path("name.0.given.0"))              # "Jane"
 print(patient.get_path("missing.field", default="N/A")) # "N/A"
 
+# Semantic extractors for identifiers and medical codes
+print(patient.get_identifier(system="http://hospital.org/mrn")) # "MRN-123"
+# print(obs.get_coding(system="http://loinc.org"))               # "883-9"
+
 # Export to JSON or XML
 print(patient.to_json())
 print(patient.to_xml())
@@ -164,38 +168,35 @@ write_ndjson([patient, observation], "export.ndjson.gz")
 Interact with FHIR servers (e.g. HAPI, AWS HealthLake, Google Healthcare) using Python's standard library `urllib` without installing `requests` or `httpx`:
 
 ```python
-from fhir_lite import FHIRClient, Patient
+from fhir_lite import FHIRClient, Patient, Bundle
 
 client = FHIRClient(
     base_url="https://hapi.fhir.org/baseR4",
-    auth="my-bearer-token"  # or auth=("user", "password")
+    auth="my-bearer-token",  # or auth=("user", "password")
+    max_retries=3,           # Automatic retry on 429 (rate limit), 502, 503, 504
+    backoff_factor=0.5,      # Exponential backoff + Retry-After header parsing
 )
 
 # Fetch a resource by ID (auto-instantiates typed Patient)
 patient = client.read(Patient, "12345")
-print(patient.gender)
 
-# Search with parameters (returns typed Bundle)
-bundle = client.search(Patient, family="Smith", _count=20)
-for pat in bundle.get_resources():
-    print(pat.id)
+# Conditional Create (If-None-Exist) & Idempotent get_or_create
+patient, created = client.get_or_create(patient, identifier="http://hospital.org/mrn|12345")
+
+# FHIR JSON Patch (partial updates without race conditions)
+client.patch(Patient, patient.id, [
+    {"op": "replace", "path": "/active", "value": False}
+])
 
 # Automatic multi-page search iterator (follows bundle.link 'next')
 for pat in client.iter_search(Patient, family="Smith", max_pages=5):
     print(pat.id)
 
-# Manual page navigation
-if bundle.next_url:
-    next_bundle = client.next_page(bundle)
-
-# Atomic Transactions & Batches (POST [base])
-tx = Bundle(type="transaction")
-tx.add_entry(resource=new_patient, request={"method": "POST", "url": "Patient"})
+# Fluent Transaction & Batch Builder (POST [base])
+tx = Bundle.transaction()
+tx.add_create(Patient(gender="female", active=True))
+tx.add_delete(Patient, "old-patient-id")
 tx_response = client.transaction(tx)
-
-# Create / Update / Delete
-new_patient = client.create(Patient(gender="female", active=True))
-client.delete(Patient, new_patient.id)
 ```
 
 ---
@@ -261,6 +262,7 @@ python -m tests.test_operation_outcome
 python -m tests.test_optimization
 python -m tests.test_pydantic_interop
 python -m tests.test_reference_and_path
+python -m tests.test_advanced_features
 ```
 
 ---

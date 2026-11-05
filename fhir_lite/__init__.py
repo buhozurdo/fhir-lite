@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 _MOD_RESOURCES = ".resources"
 _MOD_CLIENT = ".client"
