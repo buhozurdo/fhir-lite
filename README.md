@@ -1,9 +1,10 @@
 # FHIR Lite
 
+[![PyPI version](https://img.shields.io/pypi/v/fhir-lite.svg)](https://pypi.org/project/fhir-lite/)
 [![Python](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://www.python.org/)
 [![Dependencies](https://img.shields.io/badge/Dependencies-Zero%20(stdlib%20only)-success.svg)]()
 [![codecov](https://codecov.io/gh/buhozurdo/fhir-lite/branch/main/graph/badge.svg)](https://codecov.io/gh/buhozurdo/fhir-lite)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)]()
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
 **FHIR Lite** is an ultra-lightweight, zero-dependency Python library designed to parse, modify, validate, and convert medical resources under the **HL7 FHIR (Fast Healthcare Interoperability Resources)** standard.
 
@@ -22,7 +23,13 @@ Built specifically for high-throughput, low-latency, and package-size-critical e
 
 ## Installation
 
-Because **FHIR Lite** has zero external dependencies, you can simply vendor the `fhir_lite` directory into your project, or install locally:
+Install the latest release directly from [PyPI](https://pypi.org/project/fhir-lite/):
+
+```bash
+pip install fhir-lite
+```
+
+Because **FHIR Lite** has zero external dependencies, you can also simply vendor the `fhir_lite` directory into your project, or install locally:
 
 ```bash
 # Clone the repository
