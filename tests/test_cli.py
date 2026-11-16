@@ -188,3 +188,39 @@ def test_cli_piping_stdin_stdout(monkeypatch, capsys):
     captured_val = capsys.readouterr()
     assert code_val == 0
     assert "[OK]" in captured_val.out
+
+
+def test_cli_path_traversal_and_safe_resolution(tmp_path, capsys):
+    from fhir_lite.cli import _resolve_safe_path
+    import pytest
+
+    # 1. Empty / non-string path
+    with pytest.raises(ValueError, match="cannot be empty"):
+        _resolve_safe_path("")
+
+    # 2. Null byte injection attempt
+    with pytest.raises(ValueError, match="null byte injection"):
+        _resolve_safe_path("data/test\0file.json")
+
+    # 3. Directory instead of file
+    test_dir = tmp_path / "testdir"
+    test_dir.mkdir()
+    with pytest.raises(IsADirectoryError):
+        _resolve_safe_path(str(test_dir), for_write=False)
+
+    # 4. Non-existent file for read
+    with pytest.raises(FileNotFoundError):
+        _resolve_safe_path(str(tmp_path / "nonexistent.json"), for_write=False)
+
+    # 5. Safe resolution for write with automatic parent directory creation
+    nested_out = tmp_path / "nested" / "sub" / "output.xml"
+    safe_out = _resolve_safe_path(str(nested_out), for_write=True)
+    assert safe_out.parent.exists()
+
+    # 6. CLI invocation with non-existent file returns code 1 and error message
+    non_existent = str(tmp_path / "does_not_exist.json")
+    code = main(["convert", non_existent])
+    assert code == 1
+    err = capsys.readouterr().err
+    assert "Error reading input" in err
+
