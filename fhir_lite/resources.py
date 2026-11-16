@@ -179,6 +179,42 @@ class FHIRResource:
                 return c.get("code")
         return None
 
+    def fhirpath(self, expression: str, first: bool = False) -> Any:
+        """Evaluate a FHIRPath expression against this resource.
+
+        Parameters
+        ----------
+        expression : str
+            FHIRPath expression (e.g. "name.where(use = 'official').family").
+        first : bool, default False
+            If True, returns the first match or None instead of a list.
+
+        Returns
+        -------
+        list[Any] | Any
+            List of matching values, or single value if first=True.
+        """
+        from .fhirpath import evaluate_fhirpath
+        return evaluate_fhirpath(self, expression, first=first)
+
+    def anonymize(self, config: Any = None, in_place: bool = False) -> "FHIRResource":
+        """Anonymize this resource according to HIPAA Safe Harbor rules.
+
+        Parameters
+        ----------
+        config : DeidConfig, optional
+            De-identification rules (default: strict Safe Harbor).
+        in_place : bool, default False
+            Whether to sanitize in place or return a clean copy.
+
+        Returns
+        -------
+        FHIRResource
+            The de-identified resource.
+        """
+        from .anonymize import anonymize as deid_fn
+        return deid_fn(self, config=config, in_place=in_place)
+
     def __getitem__(self, key: str):
         return self.data[key]
 

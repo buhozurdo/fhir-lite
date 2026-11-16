@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fhir-lite"
-version = "0.4.0"
+version = "0.5.0"
 description = "Ultra-lightweight, zero-dependency FHIR library for Python."
 readme = "README.md"
 authors = [
@@ -28,8 +28,12 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+fhir-lite = "fhir_lite.cli:main"
+
 [project.optional-dependencies]
 pydantic = ["pydantic>=2.0"]
+all = ["pydantic>=2.0", "pytest>=7.0", "pytest-cov>=4.0"]
 
 [project.urls]
 Homepage = "https://github.com/BuhoZurdo/fhir-lite"

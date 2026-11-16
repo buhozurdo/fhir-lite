@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 _MOD_RESOURCES = ".resources"
 _MOD_CLIENT = ".client"
@@ -18,6 +18,8 @@ _MOD_SERIALIZER = ".serializer"
 _MOD_NDJSON = ".ndjson"
 _MOD_TYPES = ".types"
 _MOD_VERSION = ".version"
+_MOD_FHIRPATH = ".fhirpath"
+_MOD_ANONYMIZE = ".anonymize"
 
 # Mapping from public symbols to their internal modules for lazy loading
 _SUBMODULE_MAP = {
@@ -72,6 +74,12 @@ _SUBMODULE_MAP = {
     "fhir_version_context": _MOD_VERSION,
     "normalize_field": _MOD_VERSION,
     "get_version_info": _MOD_VERSION,
+    # FHIRPath (fhir_lite.fhirpath)
+    "evaluate_fhirpath": _MOD_FHIRPATH,
+    "FHIRPathError": _MOD_FHIRPATH,
+    # Anonymization (fhir_lite.anonymize)
+    "DeidConfig": _MOD_ANONYMIZE,
+    "anonymize": _MOD_ANONYMIZE,
 }
 
 
@@ -157,6 +165,12 @@ __all__ = [
     "fhir_version_context",
     "normalize_field",
     "get_version_info",
+    # FHIRPath (fhir_lite.fhirpath)
+    "evaluate_fhirpath",
+    "FHIRPathError",
+    # Anonymization (fhir_lite.anonymize)
+    "DeidConfig",
+    "anonymize",
 ]
 
 
@@ -217,4 +231,12 @@ if TYPE_CHECKING:
         fhir_version_context,
         normalize_field,
         get_version_info,
+    )
+    from .fhirpath import (
+        evaluate_fhirpath,
+        FHIRPathError,
+    )
+    from .anonymize import (
+        DeidConfig,
+        anonymize,
     )

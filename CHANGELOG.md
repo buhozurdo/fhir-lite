@@ -11,6 +11,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-11-16
+
+### Added
+- **Native Zero-Dependency FHIRPath Mini-Engine (`fhir_lite.fhirpath`):**
+  - AST-based tokenizer, recursive-descent parser, and evaluator written in pure Python.
+  - Dot-notation hierarchical navigation (`Patient.name.family`, `Observation.code.coding.code`).
+  - Safe automatic array flattening and unpackaging (`name.given`).
+  - `.where(...)` filtering with boolean logic (`and`, `or`), equality (`=`, `!=`), and numerical/relational comparisons (`<`, `<=`, `>`, `>=`).
+  - Collection operators: `.exists([criteria])`, `.empty()`, `.first()`, `.last()`, `.count()`, `.skip(n)`, `.take(n)`, `.tail()`, `.distinct()`, `.as(ResourceType)`.
+  - String manipulation functions: `.contains()`, `.startsWith()`, `.endsWith()`, `.lower()`, `.upper()`, `.join()`.
+  - Direct integration method: `FHIRResource.fhirpath(expression, first=False)`.
+  - Top-level function: `fhir_lite.evaluate_fhirpath(resource_or_data, expression, first=False)`.
+- **Integrated Command-Line Interface (CLI - `fhir-lite` / `python -m fhir_lite`):**
+  - Direct entrypoint script `fhir-lite` and module execution `python -m fhir_lite`.
+  - `convert`: Bidirectional conversion between JSON and XML with auto-detection, `--to [json|xml]`, `--indent`, and `--no-pretty`.
+  - `validate`: Syntax and clinical/structural rules validation with detailed issue breakdown.
+  - `fhirpath`: Shell-level querying and filtering with JSON output or line-by-line text (`-f text`), `--first`.
+  - `anonymize`: Terminal-driven HIPAA Safe Harbor de-identification.
+  - Native Unix pipe streaming support (`cat input.json | fhir-lite convert --to xml > output.xml`).
+- **HIPAA Safe Harbor De-identification and Sanitization (`fhir_lite.anonymize`):**
+  - Compliance with 45 CFR § 164.514(b)(2) (Safe Harbor Method), eliminating or sanitizing all 18 PHI identifier categories.
+  - `DeidConfig` with configurable policies: `remove_names`, `name_placeholder`, `remove_telecom`, `remove_addresses`, `keep_state_and_country`, `remove_identifiers`, `pseudonymize_id`, `salt`, `remove_photos`, `remove_narratives`, `date_handling` (`year_only`, `shift`, `remove`, `preserve`), `date_shift_days`, `remove_extensions`.
+  - Recursive `Bundle` sanitization with automatic cross-reference relinking (`Observation.subject.reference` updated to pseudonymized patient ID).
+  - Direct integration: `FHIRResource.anonymize(config=None, in_place=False)`.
+- **GitHub Actions Workflows Modernization:**
+  - Standardized CI/CD pipelines across `build.yml`, `ci.yml`, `sonar.yml`, `python-publish.yml`, and `release.yml`.
+  - PyPI publishing via OpenID Connect (OIDC) Trusted Publishing.
+  - Automatic GitHub Release asset building and attachment.
+  - SonarQube Cloud scanning and Codecov coverage aggregation.
+
+---
+
 ## [0.4.0] - 2026-11-04
 
 ### Added
@@ -125,7 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Suites:**
   - 9 standalone test suites covering security, serialization, streaming, typing, versions, optimization, and client without external dependencies.
 
-[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.2...v0.3.0
 [0.1.2]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.1...v0.1.2
