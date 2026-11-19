@@ -22,7 +22,7 @@ def _get_version() -> str:
         from . import __version__
         return __version__
     except Exception:
-        return "0.5.0"
+        return "0.6.0"
 
 
 def _resolve_safe_path(path_str: str, for_write: bool = False) -> Path:

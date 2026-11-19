@@ -11,6 +11,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-11-19
+
+### Added
+- **Bundle Lazy Evaluation & High-Throughput Streaming:**
+  - `Bundle.iter_entries()`: Yields raw entry dictionaries lazily without list allocations.
+  - `Bundle.iter_resources()`: Generates typed `FHIRResource` instances on demand.
+  - `Bundle.iter_resources_by_type()`: Filters on raw dictionaries (`resourceType`) before instantiating objects, eliminating 99% of class wrapper overhead on large bundles (7.4x to 15x faster on 2,000-entry bundles).
+  - `Bundle.iter_raw_resources()`: Streams raw inner resource dictionaries directly with zero class overhead.
+  - `Bundle.filter_entries()`: Arbitrary predicate-based filtering on raw entries/resources.
+  - `Bundle.stream_json()` & `Bundle.iter_json()`: Incremental JSON serialization streaming chunks directly to IO text streams or network sockets without building monolithic in-memory strings.
+- **NDJSON Bulk Data Streaming & Acceleration:**
+  - Bounded 64KB I/O buffer (`buffering=65536`) on file streams for high-throughput batch reading/writing.
+  - Optional auto-detected C serializers (`orjson` and `ujson`) with zero-dependency fallback to standard `json`.
+  - Batching line buffer in `write_ndjson` to minimize system calls.
+  - `iter_ndjson_raw()` & `iter_loads_ndjson_raw()`: Direct raw dictionary streaming for high-throughput ETL pipelines (Flatiron / Epic Systems FHIR Bulk Data).
+  - `iter_loads_ndjson()`: Lazy in-memory parser yielding resources on demand.
+  - `iter_dumps_ndjson()`: Lazy generator emitting serialized NDJSON lines.
+- **Pre-compiled Fast-Path Validations:**
+  - Migrated `VALID_STATUSES`, `VALID_GENDERS`, and `VALID_TYPES` to immutable `frozenset` for accelerated $O(1)$ set membership lookups.
+  - Added pre-compiled `COMMON_UCUM_UNITS` in `Observation` for fast-path clinical unit validation.
+
+### Fixed
+- **Security Hardening in CLI (CWE-22 / CWE-73):**
+  - Canonical path resolution and sanitization (`_resolve_safe_path`) in `fhir_lite/cli.py` mitigating Path Traversal vulnerabilities from faulty or adversarial LLM-supplied arguments.
+  - Defensive error handling in CLI subcommands (`convert`, `validate`, `fhirpath`, `anonymize`) with clean error reporting to `sys.stderr` and exit code 1.
+
+---
+
 ## [0.5.0] - 2026-11-16
 
 ### Added
@@ -157,7 +185,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Suites:**
   - 9 standalone test suites covering security, serialization, streaming, typing, versions, optimization, and client without external dependencies.
 
-[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/BuhoZurdo/fhir-lite/compare/v0.1.2...v0.3.0

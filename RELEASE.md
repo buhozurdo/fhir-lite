@@ -48,6 +48,7 @@ We strictly adhere to [Semantic Versioning 2.0.0](https://semver.org/) and [PEP 
 
 | Git Tag | Release Date | Target Commit | Channel | Release Summary |
 | :--- | :---: | :---: | :---: | :--- |
+| [`v0.6.0`](#v060--bundle-lazy-evaluation-ndjson-streaming-acceleration--cli-path-security) | 2026-11-19 | `5a130aa` | **GA** | Bundle lazy evaluation, NDJSON streaming acceleration & CLI path security |
 | [`v0.5.0`](#v050--native-zero-dependency-fhirpath-mini-engine-cli-tools--hipaa-safe-harbor-de-identification) | 2026-11-16 | `baece2e` | **GA** | Native FHIRPath mini-engine, CLI tools & HIPAA Safe Harbor de-identification |
 | [`v0.4.0`](#v040--http-resiliency-intelligent-retries-json-patch-conditional-create--semantic-extractors) | 2026-11-05 | `8907f76` | **GA** | Intelligent retries, JSON Patch, conditional create, semantic extractors & fluent builders |
 | [`v0.3.0`](#v030--enterprise-rest-client-safe-deep-traversal--automated-cicd) | 2026-11-03 | `9b9defc` | **GA** | Enterprise FHIR client pagination, deep path traversal & automated CI/CD pipelines |
@@ -90,6 +91,49 @@ Before cutting an official release, the following checklist must be satisfied in
 ---
 
 ## 📦 Official Release Notes Registry
+
+---
+
+### `v0.6.0` — Bundle Lazy Evaluation, NDJSON Streaming Acceleration & CLI Path Security
+
+> **Release Metadata**
+>
+> | Attribute | Details |
+> | :--- | :--- |
+> | **Git Tag** | `v0.6.0` |
+> | **Release Date** | `2026-11-19` |
+> | **Target Commit** | `5a130aa` |
+> | **Release Channel** | **GA (General Availability / Production)** |
+> | **PR / Merge Title** | `feat: release v0.6.0 - Bundle lazy evaluation, NDJSON streaming acceleration & CLI path security` |
+> | **PR Description** | Implements high-throughput lazy evaluation and chunked streaming for Bundles (up to 2,000 entries in 0.2ms), accelerated NDJSON bulk data streaming with 64KB bounded buffering and optional C-accelerators (orjson/ujson), pre-compiled frozenset model validations, and security hardening against Path Traversal (CWE-22) in CLI argument handling. |
+
+#### 🚀 Key Highlights & Architectural Additions
+- **High-Throughput Bundle Lazy Evaluation & Chunked Streaming:**
+  - `Bundle.iter_entries()`, `Bundle.iter_resources()`, and `Bundle.iter_raw_resources()` for zero-copy lazy traversal.
+  - `Bundle.iter_resources_by_type()` and `Bundle.get_resources_by_type()` optimized to inspect raw dictionary `resourceType` before instantiating objects (achieving 1,460% faster filtering on 2,000-entry bundles: 3.12ms down to 0.20ms).
+  - Incremental JSON streaming (`stream_json()` and `iter_json()`) emitting chunk by chunk to sockets or files without massive in-memory string allocations.
+  - Arbitrary predicate-based filtering on raw entries/resources via `Bundle.filter_entries()`.
+- **NDJSON Bulk Data Streaming & Pluggable Acceleration:**
+  - Bounded 64KB I/O buffering across all file readers and writers (`buffering=65536`).
+  - Pluggable C-accelerators (`orjson` / `ujson`) when installed, maintaining 100% zero-dependency stdlib fallback.
+  - Raw dictionary generators (`iter_ndjson_raw()`, `iter_loads_ndjson_raw()`) for high-throughput FHIR Bulk Data ETL workflows.
+  - `iter_loads_ndjson()` for in-memory lazy generator parsing.
+  - `iter_dumps_ndjson()` for lazy line-by-line serialization.
+- **Pre-Compiled Model Validations:**
+  - Implemented immutable `frozenset` lookups for `VALID_STATUSES`, `VALID_GENDERS`, and `VALID_TYPES`.
+  - Added pre-compiled `COMMON_UCUM_UNITS` for sub-microsecond unit checks in `Observation`.
+- **CLI Security Hardening (CWE-22):**
+  - Canonical path resolution and null-byte sanitization (`_resolve_safe_path`) preventing directory traversal via untrusted or LLM-supplied CLI arguments.
+  - Defensive error handling across all CLI subcommands (`convert`, `validate`, `fhirpath`, `anonymize`).
+
+#### 🧪 Validation & Test Suite Metrics
+- Total Tests: **71 tests passing (100% success rate)**
+- Line Coverage: **87% - 92% overall project coverage**
+- Test Matrix: Python 3.9, 3.10, 3.11, 3.12, 3.13, 3.14
+- Runtime Dependencies: **0 external dependencies (100% Python standard library)**
+
+#### 🔄 Next Release Train Step
+- `v0.7.0-alpha`: Embedded SQLite in-memory FHIR query engine, Bulk Data export parsing, and US-Core/IPS profile validation extensions.
 
 ---
 
