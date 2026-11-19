@@ -93,11 +93,77 @@ def test_lazy_loading_pep_562():
         check("AttributeError raised for non-existent symbol", True)
 
 
+def test_bundle_and_ndjson_performance_optimizations():
+    print("\n[4] Bundle & NDJSON lazy evaluation and streaming optimizations")
+    import io
+    import json
+    from fhir_lite import (
+        Bundle,
+        Patient,
+        Observation,
+        iter_loads_ndjson,
+        iter_loads_ndjson_raw,
+        iter_dumps_ndjson,
+    )
+
+    # 1. Bundle lazy evaluation on 500 entries
+    bundle = Bundle(type="collection")
+    for i in range(500):
+        bundle.add_entry(Observation(id=f"obs-{i}", status="final", code={"text": "lab"}))
+    bundle.add_entry(Patient(id="rare-pat", active=True, gender="female"))
+
+    # Verify iter_entries does not duplicate list
+    entries_gen = bundle.iter_entries()
+    first_entry = next(entries_gen)
+    check("iter_entries yields entry dict", isinstance(first_entry, dict))
+
+    # Verify iter_raw_resources yields dict directly
+    raw_obs_gen = bundle.iter_raw_resources("Observation")
+    first_raw = next(raw_obs_gen)
+    check("iter_raw_resources yields raw dict without wrapper", isinstance(first_raw, dict) and not isinstance(first_raw, FHIRResource))
+
+    # Verify iter_resources_by_type filters before instantiating
+    rare_gen = bundle.iter_resources_by_type("Patient")
+    rare_pat = next(rare_gen)
+    check("iter_resources_by_type yields matching Patient", isinstance(rare_pat, Patient) and rare_pat.id == "rare-pat")
+
+    # get_resources_by_type only instantiates matching items
+    pats = bundle.get_resources_by_type(Patient)
+    check("get_resources_by_type returns matching items", len(pats) == 1 and pats[0].id == "rare-pat")
+
+    # filter_entries with predicate
+    filtered = list(bundle.filter_entries(lambda d: d.get("id") == "rare-pat"))
+    check("filter_entries filters with predicate", len(filtered) == 1 and filtered[0].id == "rare-pat")
+
+    # stream_json incremental emission
+    stream_buf = io.StringIO()
+    written = bundle.stream_json(stream_buf, chunk_size=50)
+    check("stream_json writes valid JSON", written > 0)
+    reloaded = json.loads(stream_buf.getvalue())
+    check("stream_json parses with 501 entries", len(reloaded["entry"]) == 501)
+
+    # 2. NDJSON lazy streaming on 500 records
+    ndjson_data = "\n".join(json.dumps({"resourceType": "Observation", "id": f"nd-{i}", "status": "final"}) for i in range(500))
+    lazy_gen = iter_loads_ndjson(ndjson_data)
+    first_loaded = next(lazy_gen)
+    check("iter_loads_ndjson yields FHIRResource lazily", isinstance(first_loaded, Observation))
+
+    lazy_raw_gen = iter_loads_ndjson_raw(ndjson_data)
+    first_raw_loaded = next(lazy_raw_gen)
+    check("iter_loads_ndjson_raw yields raw dict lazily", isinstance(first_raw_loaded, dict))
+
+    # iter_dumps_ndjson
+    line_gen = iter_dumps_ndjson([Patient(id="p1", active=True), Observation(id="o1", status="final")])
+    first_line = next(line_gen)
+    check("iter_dumps_ndjson yields line lazily", first_line.endswith("\n"))
+
+
 if __name__ == "__main__":
     tests = [
         test_slots_eliminate_dict,
         test_dynamic_attribute_assignment,
         test_lazy_loading_pep_562,
+        test_bundle_and_ndjson_performance_optimizations,
     ]
 
     passed = 0

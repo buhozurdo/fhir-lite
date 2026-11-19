@@ -46,9 +46,13 @@ _SUBMODULE_MAP = {
     "safe_fromstring": _MOD_SERIALIZER,
     # NDJSON
     "iter_ndjson": _MOD_NDJSON,
+    "iter_ndjson_raw": _MOD_NDJSON,
     "write_ndjson": _MOD_NDJSON,
     "loads_ndjson": _MOD_NDJSON,
+    "iter_loads_ndjson": _MOD_NDJSON,
+    "iter_loads_ndjson_raw": _MOD_NDJSON,
     "dumps_ndjson": _MOD_NDJSON,
+    "iter_dumps_ndjson": _MOD_NDJSON,
     # TypedDicts (fhir_lite.types)
     "ExtensionDict": _MOD_TYPES,
     "CodingDict": _MOD_TYPES,
@@ -137,9 +141,13 @@ __all__ = [
     "safe_fromstring",
     # NDJSON
     "iter_ndjson",
+    "iter_ndjson_raw",
     "write_ndjson",
     "loads_ndjson",
+    "iter_loads_ndjson",
+    "iter_loads_ndjson_raw",
     "dumps_ndjson",
+    "iter_dumps_ndjson",
     # TypedDicts (fhir_lite.types)
     "ExtensionDict",
     "CodingDict",
@@ -201,9 +209,13 @@ if TYPE_CHECKING:
     )
     from .ndjson import (
         iter_ndjson,
+        iter_ndjson_raw,
         write_ndjson,
         loads_ndjson,
+        iter_loads_ndjson,
+        iter_loads_ndjson_raw,
         dumps_ndjson,
+        iter_dumps_ndjson,
     )
     from .types import (
         ExtensionDict,

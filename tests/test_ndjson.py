@@ -6,9 +6,13 @@ from fhir_lite import (
     Observation,
     Encounter,
     iter_ndjson,
+    iter_ndjson_raw,
     write_ndjson,
     loads_ndjson,
+    iter_loads_ndjson,
+    iter_loads_ndjson_raw,
     dumps_ndjson,
+    iter_dumps_ndjson,
 )
 
 
@@ -77,6 +81,37 @@ def test_ndjson_streaming():
         assert isinstance(streamed_gz[0], Patient)
         assert isinstance(streamed_gz[1], Observation)
         assert streamed_gz[0].gender == "male"
+
+        # Raw streaming without class overhead
+        streamed_raw = list(iter_ndjson_raw(plain_path))
+        assert len(streamed_raw) == 3
+        assert isinstance(streamed_raw[0], dict)
+        assert streamed_raw[0]["id"] == "pat-ndjson-1"
+
+        # Raw streaming from gzip
+        streamed_raw_gz = list(iter_ndjson_raw(gz_path))
+        assert len(streamed_raw_gz) == 3
+        assert isinstance(streamed_raw_gz[0], dict)
+
+    # 4. Lazy in-memory streaming (string and bytes)
+    lazy_items = list(iter_loads_ndjson(ndjson_str))
+    assert len(lazy_items) == 3
+    assert isinstance(lazy_items[0], Patient)
+
+    lazy_bytes = list(iter_loads_ndjson(ndjson_str.encode("utf-8")))
+    assert len(lazy_bytes) == 3
+
+    lazy_raw = list(iter_loads_ndjson_raw(ndjson_str))
+    assert len(lazy_raw) == 3
+    assert isinstance(lazy_raw[0], dict)
+
+    lazy_raw_bytes = list(iter_loads_ndjson_raw(ndjson_str.encode("utf-8")))
+    assert len(lazy_raw_bytes) == 3
+
+    # 5. Lazy dumps streaming
+    dumped_lines = list(iter_dumps_ndjson(resources))
+    assert len(dumped_lines) == 3
+    assert dumped_lines[0].endswith("\n")
 
     print("All NDJSON Bulk Data streaming tests passed successfully!")
 

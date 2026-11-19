@@ -1,6 +1,6 @@
 import json
 import xml.etree.ElementTree as ET
-from typing import Any
+from typing import Any, Callable, Iterator, IO
 from .serializer import dict_to_xml, xml_to_dict, safe_fromstring, COMMON_ARRAY_FIELDS
 
 
@@ -255,7 +255,7 @@ class Patient(FHIRResource):
         "identifier", "name", "telecom", "address", "contact",
         "communication", "generalPractitioner"
     }
-    VALID_GENDERS = {"male", "female", "other", "unknown"}
+    VALID_GENDERS = frozenset({"male", "female", "other", "unknown"})
 
     def validate(self) -> list[str]:
         errors = super().validate()
@@ -277,10 +277,16 @@ class Observation(FHIRResource):
         "performer", "interpretation", "note", "bodySite",
         "referenceRange", "hasMember", "derivedFrom", "component"
     }
-    VALID_STATUSES = {
+    VALID_STATUSES = frozenset({
         "registered", "preliminary", "final", "amended",
         "corrected", "cancelled", "entered-in-error", "unknown"
-    }
+    })
+    COMMON_UCUM_UNITS = frozenset({
+        "mg/dL", "mmol/L", "g/dL", "g/L", "ug/dL", "ng/mL", "pg/mL",
+        "mmHg", "cm", "m", "mm", "kg", "g", "mg", "ug",
+        "Cel", "[degF]", "%", "count", "/min", "10*3/uL", "10*6/uL",
+        "mL", "L", "uL", "h", "d", "wk", "mo", "a"
+    })
 
     def validate(self) -> list[str]:
         errors = super().validate()
@@ -299,10 +305,10 @@ class Bundle(FHIRResource):
     __slots__ = ()
     resource_type = "Bundle"
     array_fields = {"entry", "link", "identifier"}
-    VALID_TYPES = {
+    VALID_TYPES = frozenset({
         "document", "message", "transaction", "transaction-response",
         "batch", "batch-response", "history", "searchset", "collection"
-    }
+    })
 
     def validate(self) -> list[str]:
         errors = super().validate()
@@ -318,9 +324,15 @@ class Bundle(FHIRResource):
         """Returns the list of raw entry dicts."""
         return self.data.get("entry", [])
 
+    def iter_entries(self) -> Iterator[dict]:
+        """Generator yielding raw entry dicts lazily without list duplication."""
+        entries = self.data.get("entry")
+        if entries:
+            yield from entries
+
     def get_link(self, relation: str) -> str | None:
         """Find the URL for a specific link relation (e.g. 'next', 'previous', 'self')."""
-        links = self.data.get("link", [])
+        links = self.data.get("link")
         if not isinstance(links, list):
             return None
         target = ("previous", "prev") if relation in ("previous", "prev") else (relation,)
@@ -341,22 +353,106 @@ class Bundle(FHIRResource):
 
     def get_resources(self) -> list[FHIRResource]:
         """Extract all inner entry resources as typed FHIRResource instances."""
-        resources = []
-        for entry in self.entries:
-            if isinstance(entry, dict) and "resource" in entry and isinstance(entry["resource"], dict):
-                resources.append(FHIRResource.from_dict(entry["resource"]))
-        return resources
+        return list(self.iter_resources())
 
-    def iter_resources(self):
-        """Generator yielding inner entry resources as typed FHIRResource instances."""
-        for entry in self.entries:
-            if isinstance(entry, dict) and "resource" in entry and isinstance(entry["resource"], dict):
-                yield FHIRResource.from_dict(entry["resource"])
+    def iter_resources(self) -> Iterator[FHIRResource]:
+        """Generator yielding inner entry resources as typed FHIRResource instances lazily."""
+        entries = self.data.get("entry")
+        if not entries:
+            return
+        for entry in entries:
+            if isinstance(entry, dict):
+                raw = entry.get("resource")
+                if isinstance(raw, dict):
+                    yield FHIRResource.from_dict(raw)
+
+    def iter_raw_resources(self, resource_type: str | type[FHIRResource] | None = None) -> Iterator[dict]:
+        """Generator yielding inner resource dicts directly without FHIRResource class wrapper overhead."""
+        entries = self.data.get("entry")
+        if not entries:
+            return
+        type_str = None
+        if resource_type is not None:
+            type_str = resource_type if isinstance(resource_type, str) else getattr(resource_type, "resource_type", "")
+        for entry in entries:
+            if isinstance(entry, dict):
+                raw = entry.get("resource")
+                if isinstance(raw, dict):
+                    if type_str is None or raw.get("resourceType") == type_str:
+                        yield raw
+
+    def iter_resources_by_type(self, resource_type: str | type[FHIRResource]) -> Iterator[FHIRResource]:
+        """Generator yielding inner resources of a specific type lazily, filtering raw dicts before instantiation."""
+        type_str = resource_type if isinstance(resource_type, str) else getattr(resource_type, "resource_type", "")
+        for raw in self.iter_raw_resources(type_str):
+            yield FHIRResource.from_dict(raw)
 
     def get_resources_by_type(self, resource_type: str | type[FHIRResource]) -> list[FHIRResource]:
-        """Filter inner resources by resource type name or class."""
-        type_str = resource_type if isinstance(resource_type, str) else getattr(resource_type, "resource_type", "")
-        return [r for r in self.get_resources() if r.data.get("resourceType") == type_str]
+        """Filter inner resources by resource type name or class without instantiating irrelevant resources."""
+        return list(self.iter_resources_by_type(resource_type))
+
+    def filter_entries(
+        self,
+        predicate: Callable[[dict], bool],
+        as_resource: bool = True
+    ) -> Iterator[FHIRResource | dict]:
+        """Filter bundle entries using a predicate function evaluated on raw dicts.
+
+        Parameters
+        ----------
+        predicate : Callable[[dict], bool]
+            Predicate receiving the raw entry dict (or resource dict if entry has 'resource').
+        as_resource : bool, default True
+            If True, yields matching entries as typed FHIRResource instances.
+            If False, yields the raw matching entry dicts directly.
+        """
+        entries = self.data.get("entry")
+        if not entries:
+            return
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            res_dict = entry.get("resource")
+            target = res_dict if isinstance(res_dict, dict) else entry
+            if predicate(target):
+                if as_resource and isinstance(res_dict, dict):
+                    yield FHIRResource.from_dict(res_dict)
+                else:
+                    yield entry
+
+    def iter_json(self, chunk_size: int = 128) -> Iterator[str]:
+        """Yield chunks of serialized Bundle JSON incrementally to avoid allocating massive strings in memory."""
+        yield '{"resourceType":"Bundle"'
+        for k, v in self.data.items():
+            if k in ("resourceType", "entry"):
+                continue
+            yield f',"{k}":{json.dumps(v, ensure_ascii=False)}'
+
+        entries = self.data.get("entry")
+        if entries is not None:
+            yield ',"entry":['
+            buf: list[str] = []
+            for idx, entry in enumerate(entries):
+                prefix = "," if idx > 0 else ""
+                buf.append(prefix + json.dumps(entry, ensure_ascii=False))
+                if len(buf) >= chunk_size:
+                    yield "".join(buf)
+                    buf.clear()
+            if buf:
+                yield "".join(buf)
+            yield "]"
+        yield "}"
+
+    def stream_json(self, stream: IO[str], chunk_size: int = 128) -> int:
+        """Stream the Bundle JSON directly to an IO text stream or file without full string allocation.
+
+        Returns the total number of characters written.
+        """
+        total_chars = 0
+        for chunk in self.iter_json(chunk_size=chunk_size):
+            stream.write(chunk)
+            total_chars += len(chunk)
+        return total_chars
 
     def add_entry(
         self,

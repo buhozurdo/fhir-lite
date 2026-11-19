@@ -120,6 +120,26 @@ def test_core_suite():
     assert len(observations) == 1
     assert observations[0].id == "obs-bundle-1"
 
+    # Verify lazy generators & raw filtering
+    assert len(list(bundle.iter_entries())) == 2
+    assert len(list(bundle.iter_raw_resources())) == 2
+    assert len(list(bundle.iter_raw_resources("Patient"))) == 1
+    assert len(list(bundle.iter_resources_by_type("Patient"))) == 1
+
+    # Predicate filter
+    female_pats = list(bundle.filter_entries(lambda d: d.get("gender") == "female"))
+    assert len(female_pats) == 1
+    assert female_pats[0].id == "pat-bundle-1"
+
+    # Streaming JSON serialization
+    import io, json
+    stream_buf = io.StringIO()
+    chars_written = bundle.stream_json(stream_buf)
+    assert chars_written > 0
+    parsed_json = json.loads(stream_buf.getvalue())
+    assert parsed_json["resourceType"] == "Bundle"
+    assert len(parsed_json["entry"]) == 2
+
     # Verify XML <-> JSON roundtrip with inner resource elements
     bundle_xml = bundle.to_xml()
     assert "<Bundle" in bundle_xml
