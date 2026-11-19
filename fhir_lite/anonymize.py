@@ -153,15 +153,8 @@ def _sanitize_date_field(data: dict, key: str, val: str, config: DeidConfig) -> 
         data[key] = transformed
 
 
-def _sanitize_dates_in_dict(data: dict, config: DeidConfig) -> None:
-    date_keys = [k for k in data if k in COMMON_DATE_FIELDS or k == "period"]
-    for key in date_keys:
-        val = data.get(key)
-        if key in COMMON_DATE_FIELDS and isinstance(val, str):
-            _sanitize_date_field(data, key, val, config)
-        elif key == "period" and isinstance(val, dict):
-            _sanitize_period(val, config)
-
+def _sanitize_nested_containers(data: dict, config: DeidConfig) -> None:
+    """Recursively traverse nested dicts and lists to sanitize date fields."""
     for val in data.values():
         if isinstance(val, dict):
             _sanitize_dates_in_dict(val, config)
@@ -169,6 +162,18 @@ def _sanitize_dates_in_dict(data: dict, config: DeidConfig) -> None:
             for item in val:
                 if isinstance(item, dict):
                     _sanitize_dates_in_dict(item, config)
+
+
+def _sanitize_dates_in_dict(data: dict, config: DeidConfig) -> None:
+    date_keys = tuple(k for k in data if k in COMMON_DATE_FIELDS or k == "period")
+    for key in date_keys:
+        val = data.get(key)
+        if key in COMMON_DATE_FIELDS and isinstance(val, str):
+            _sanitize_date_field(data, key, val, config)
+        elif key == "period" and isinstance(val, dict):
+            _sanitize_period(val, config)
+
+    _sanitize_nested_containers(data, config)
 
 
 def _sanitize_names(data: dict, config: DeidConfig) -> None:
