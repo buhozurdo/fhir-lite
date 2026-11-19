@@ -50,3 +50,4 @@ htmlcov/
 # Tasks & Incidents (local tracking)
 tasks/
 tareas/
+RELEASE.md
