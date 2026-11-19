@@ -135,12 +135,36 @@ def test_bundle_and_ndjson_performance_optimizations():
     filtered = list(bundle.filter_entries(lambda d: d.get("id") == "rare-pat"))
     check("filter_entries filters with predicate", len(filtered) == 1 and filtered[0].id == "rare-pat")
 
+    # filter_entries as_resource=False
+    raw_filtered = list(bundle.filter_entries(lambda d: d.get("id") == "rare-pat", as_resource=False))
+    check("filter_entries as_resource=False returns raw dict", len(raw_filtered) == 1 and isinstance(raw_filtered[0], dict))
+
+    # filter_entries on bundle with delete entry (no resource dict)
+    bundle.add_delete("Patient", "del-1")
+    del_filtered = list(bundle.filter_entries(lambda d: "request" in d, as_resource=False))
+    check("filter_entries on non-resource entry", len(del_filtered) == 1)
+
+    # Empty bundle edge cases
+    empty_b = Bundle(type="batch")
+    check("empty bundle iter_entries is empty", list(empty_b.iter_entries()) == [])
+    check("empty bundle iter_resources is empty", list(empty_b.iter_resources()) == [])
+    check("empty bundle iter_raw_resources is empty", list(empty_b.iter_raw_resources()) == [])
+    check("empty bundle filter_entries is empty", list(empty_b.filter_entries(lambda x: True)) == [])
+    empty_json = "".join(empty_b.iter_json())
+    check("empty bundle iter_json valid", "Bundle" in empty_json and "entry" not in empty_json)
+
+    # Malformed entry edge cases
+    weird_b = Bundle(type="collection", entry=["not-a-dict", {"missing-res": 1}])
+    check("weird bundle iter_resources ignores invalid", list(weird_b.iter_resources()) == [])
+    check("weird bundle iter_raw_resources ignores invalid", list(weird_b.iter_raw_resources()) == [])
+    check("weird bundle filter_entries ignores non-dicts", len(list(weird_b.filter_entries(lambda x: True))) == 1)
+
     # stream_json incremental emission
     stream_buf = io.StringIO()
     written = bundle.stream_json(stream_buf, chunk_size=50)
     check("stream_json writes valid JSON", written > 0)
     reloaded = json.loads(stream_buf.getvalue())
-    check("stream_json parses with 501 entries", len(reloaded["entry"]) == 501)
+    check("stream_json parses with 502 entries", len(reloaded["entry"]) == 502)
 
     # 2. NDJSON lazy streaming on 500 records
     ndjson_data = "\n".join(json.dumps({"resourceType": "Observation", "id": f"nd-{i}", "status": "final"}) for i in range(500))

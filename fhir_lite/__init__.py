@@ -182,7 +182,7 @@ __all__ = [
 ]
 
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
     from .resources import (
         FHIRResource,
         Patient,

@@ -212,6 +212,15 @@ def test_cli_path_traversal_and_safe_resolution(tmp_path, capsys):
     with pytest.raises(FileNotFoundError):
         _resolve_safe_path(str(tmp_path / "nonexistent.json"), for_write=False)
 
+    # Special file / non-regular file
+    from pathlib import Path
+    from unittest.mock import patch
+    valid_file = tmp_path / "regular.json"
+    valid_file.write_text("{}", encoding="utf-8")
+    with patch.object(Path, "is_file", return_value=False):
+        with pytest.raises(ValueError, match="not a regular file"):
+            _resolve_safe_path(str(valid_file), for_write=False)
+
     # 5. Safe resolution for write with automatic parent directory creation
     nested_out = tmp_path / "nested" / "sub" / "output.xml"
     safe_out = _resolve_safe_path(str(nested_out), for_write=True)
@@ -223,4 +232,30 @@ def test_cli_path_traversal_and_safe_resolution(tmp_path, capsys):
     assert code == 1
     err = capsys.readouterr().err
     assert "Error reading input" in err
+
+    code_v = main(["validate", non_existent])
+    assert code_v == 1
+    err_v = capsys.readouterr().err
+    assert "Error reading input" in err_v
+
+    code_fp = main(["fhirpath", "Patient.name", non_existent])
+    assert code_fp == 1
+    err_fp = capsys.readouterr().err
+    assert "Error reading input" in err_fp
+
+    code_an = main(["anonymize", non_existent])
+    assert code_an == 1
+    err_an = capsys.readouterr().err
+    assert "Error reading input" in err_an
+
+
+def test_cli_module_execution(monkeypatch):
+    import runpy
+    monkeypatch.setattr("sys.argv", ["fhir-lite", "--version"])
+    try:
+        runpy.run_module("fhir_lite", run_name="__main__")
+    except SystemExit as e:
+        assert e.code == 0
+
+
 

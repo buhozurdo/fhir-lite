@@ -8,7 +8,7 @@ from .resources import FHIRResource
 IO_BUFFER_SIZE = 65536  # 64KB bounded I/O buffer for high-throughput streaming
 
 # Detect optional high-performance C deserializers/serializers (orjson/ujson)
-try:
+try:  # pragma: no cover
     import orjson  # type: ignore
 
     def _fast_loads(data: str | bytes) -> dict:
@@ -18,7 +18,7 @@ try:
         return orjson.dumps(data).decode("utf-8")
 
     HAS_ORJSON = True
-except ImportError:
+except ImportError:  # pragma: no cover
     try:
         import ujson  # type: ignore
 
@@ -76,7 +76,7 @@ def iter_ndjson_raw(source: str | os.PathLike | IO[str] | IO[bytes]) -> Iterator
 def _iter_stream_raw(stream: IO[str] | IO[bytes]) -> Iterator[dict]:
     for line in stream:
         if isinstance(line, bytes):
-            if HAS_ORJSON:
+            if HAS_ORJSON:  # pragma: no cover
                 line_stripped = line.strip()
                 if line_stripped:
                     yield _fast_loads(line_stripped)

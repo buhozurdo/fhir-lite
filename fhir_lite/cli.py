@@ -21,7 +21,7 @@ def _get_version() -> str:
     try:
         from . import __version__
         return __version__
-    except Exception:
+    except Exception:  # pragma: no cover
         return "0.6.0"
 
 
@@ -426,11 +426,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return cmd_validate(args)
     elif args.subcommand == "fhirpath":
         return cmd_fhirpath(args)
-    elif args.subcommand == "anonymize":
+    else:
         return cmd_anonymize(args)
 
-    return 0
 
-
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

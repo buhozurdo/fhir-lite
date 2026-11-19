@@ -113,6 +113,28 @@ def test_ndjson_streaming():
     assert len(dumped_lines) == 3
     assert dumped_lines[0].endswith("\n")
 
+    # 6. Stream targets and chunked buffer (>128 items)
+    many_resources = [Patient(id=f"p-{i}", active=True) for i in range(150)]
+    text_buf = io.StringIO()
+    count_text = write_ndjson(many_resources, text_buf)
+    assert count_text == 150
+    assert len(text_buf.getvalue().strip().split("\n")) == 150
+    assert write_ndjson([], text_buf) == 0
+
+    # Bytes stream target
+    bytes_buf = io.BytesIO()
+    count_bytes = write_ndjson(many_resources, bytes_buf)
+    assert count_bytes == 150
+    assert len(bytes_buf.getvalue()) > 0
+
+    # Raw stream reading (from stream with blank lines)
+    raw_stream = io.StringIO("{\"resourceType\": \"Patient\", \"id\": \"s1\"}\n\n  \n{\"resourceType\": \"Patient\", \"id\": \"s2\"}\n")
+    stream_recs = list(iter_ndjson_raw(raw_stream))
+    assert len(stream_recs) == 2
+    assert stream_recs[0]["id"] == "s1"
+    assert stream_recs[1]["id"] == "s2"
+
+
     print("All NDJSON Bulk Data streaming tests passed successfully!")
 
 
