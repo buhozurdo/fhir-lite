@@ -26,7 +26,7 @@ def _get_version() -> str:
         from . import __version__
         return __version__
     except Exception:  # pragma: no cover
-        return "0.6.0"
+        return "0.6.1"
 
 
 def _resolve_safe_path(path_str: str, for_write: bool = False) -> Path:
