@@ -120,6 +120,12 @@ def test_reference():
     ref1.value = "Patient/12345"
     check("setter value alias", ref1.value == "Patient/12345")
 
+    try:
+        _ = ref1.non_existent_field  # type: ignore
+        check("nonexistent attr raises AttributeError", False)
+    except AttributeError:
+        check("nonexistent attr raises AttributeError", True)
+
 
 def test_reference_and_path():
     test_get_path()

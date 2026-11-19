@@ -154,12 +154,16 @@ def _sanitize_date_field(data: dict, key: str, val: str, config: DeidConfig) -> 
 
 
 def _sanitize_dates_in_dict(data: dict, config: DeidConfig) -> None:
-    for key, val in list(data.items()):
+    date_keys = [k for k in data if k in COMMON_DATE_FIELDS or k == "period"]
+    for key in date_keys:
+        val = data.get(key)
         if key in COMMON_DATE_FIELDS and isinstance(val, str):
             _sanitize_date_field(data, key, val, config)
         elif key == "period" and isinstance(val, dict):
             _sanitize_period(val, config)
-        elif isinstance(val, dict):
+
+    for val in data.values():
+        if isinstance(val, dict):
             _sanitize_dates_in_dict(val, config)
         elif isinstance(val, list):
             for item in val:

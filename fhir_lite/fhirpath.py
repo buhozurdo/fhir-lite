@@ -280,6 +280,15 @@ def _is_truthy(val: Any) -> bool:
     return bool(val)
 
 
+def _unbox_value(val: list[Any]) -> Any:
+    """Unbox single item collection or return None/list."""
+    if len(val) == 1:
+        return val[0]
+    if not val:
+        return None
+    return val
+
+
 def _eval_comparison(op: str, l: Any, r: Any) -> list[Any]:
     """Evaluate relational or equality binary operator on unboxed values."""
     if op == "=":
@@ -475,8 +484,8 @@ class Evaluator:
         left_val = self.eval(left_node, context)
         right_val = self.eval(right_node, context)
 
-        l = left_val[0] if len(left_val) == 1 else (None if len(left_val) == 0 else left_val)
-        r = right_val[0] if len(right_val) == 1 else (None if len(right_val) == 0 else right_val)
+        l = _unbox_value(left_val)
+        r = _unbox_value(right_val)
 
         return _eval_comparison(op, l, r)
 

@@ -716,14 +716,16 @@ class Reference:
         self.id = id
         self.display = display
 
-    @property
-    def reference(self) -> str:
-        """The reference URI string."""
-        return self._reference
+    def __getattr__(self, name: str) -> Any:
+        if name == "reference":
+            return self._reference
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
-    @reference.setter
-    def reference(self, val: str) -> None:
-        self._reference = val
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "reference":
+            object.__setattr__(self, "_reference", value)
+        else:
+            super().__setattr__(name, value)
 
     @property
     def value(self) -> str:
@@ -780,7 +782,7 @@ class Reference:
 
     def to_dict(self) -> dict[str, str]:
         """Convert Reference instance to a FHIR Reference dict."""
-        out: dict[str, str] = {"reference": self.reference}
+        out: dict[str, str] = {"reference": self._reference}
         if self.display:
             out["display"] = self.display
         if self.resource_type:
@@ -788,4 +790,4 @@ class Reference:
         return out
 
     def __repr__(self) -> str:
-        return f"<Reference {self.reference!r}>"
+        return f"<Reference {self._reference!r}>"
