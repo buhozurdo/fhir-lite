@@ -113,6 +113,13 @@ def test_reference():
     check("to_dict() matches", ref3.to_dict() == {"reference": "Condition/cond-1", "display": "Hypertension", "type": "Condition"})
     check("repr contains reference", "Condition/cond-1" in repr(ref3))
 
+    # 8. Property getter and setter
+    ref1.reference = "Patient/99999"
+    check("setter reference", ref1.reference == "Patient/99999")
+    check("getter value alias", ref1.value == "Patient/99999")
+    ref1.value = "Patient/12345"
+    check("setter value alias", ref1.value == "Patient/12345")
+
 
 def test_reference_and_path():
     test_get_path()

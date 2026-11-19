@@ -70,6 +70,49 @@ def test_cli_convert_xml_to_json():
         os.unlink(out_path)
 
 
+def test_cli_convert_autodetect_from_content(capsys):
+    # XML content auto-detected to json
+    xml_content = '<Patient xmlns="http://hl7.org/fhir"><id value="p1"/></Patient>'
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".txt") as in_f:
+        in_f.write(xml_content)
+        in_path = in_f.name
+
+    try:
+        code = main(["convert", in_path])
+        assert code == 0
+        captured = capsys.readouterr()
+        assert '"resourceType": "Patient"' in captured.out
+    finally:
+        os.unlink(in_path)
+
+    # JSON content auto-detected to xml
+    json_content = '{"resourceType": "Patient", "id": "p2"}'
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".txt") as in_f:
+        in_f.write(json_content)
+        in_path = in_f.name
+
+    try:
+        code = main(["convert", in_path])
+        assert code == 0
+        captured = capsys.readouterr()
+        assert '<Patient' in captured.out
+    finally:
+        os.unlink(in_path)
+
+    # Unknown content fails auto-detect
+    with tempfile.NamedTemporaryFile("w+", delete=False, suffix=".txt") as in_f:
+        in_f.write("unknown format text")
+        in_path = in_f.name
+
+    try:
+        code = main(["convert", in_path])
+        assert code == 1
+        captured = capsys.readouterr()
+        assert "Could not auto-detect format" in captured.err
+    finally:
+        os.unlink(in_path)
+
+
 def test_cli_validate_success(capsys):
     valid_patient = json.dumps({
         "resourceType": "Patient",

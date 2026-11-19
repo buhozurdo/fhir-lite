@@ -244,3 +244,38 @@ def test_cli_anonymize_file_and_piping(monkeypatch, capsys):
     parsed = json.loads(captured.out.strip())
     assert parsed.get("birthDate") == "1809-02-22"
     assert "telecom" not in parsed
+
+
+def test_anonymize_contacts_periods_and_extensions():
+    pat_dict = {
+        "resourceType": "Patient",
+        "id": "pat-extra",
+        "extension": [{"url": "http://example.org/ext", "valueString": "secret"}],
+        "modifierExtension": [{"url": "http://example.org/mod", "valueBoolean": True}],
+        "contact": [
+            {
+                "name": {"family": "NextOfKin"},
+                "telecom": [{"system": "phone", "value": "111-222"}],
+                "address": {"city": "Boston"},
+            }
+        ],
+        "period": {
+            "start": "2020-05-10T12:00:00Z",
+            "end": "2020-05-20T18:00:00Z",
+        },
+        "birthDate": "1995-06-15T08:30:00Z",
+    }
+    cfg = DeidConfig(
+        remove_extensions=True,
+        date_handling="shift",
+        date_shift_days=5,
+    )
+    anon = anonymize(pat_dict, config=cfg)
+    assert "extension" not in anon
+    assert "modifierExtension" not in anon
+    assert "name" not in anon["contact"][0]
+    assert "telecom" not in anon["contact"][0]
+    assert "address" not in anon["contact"][0]
+    assert anon["period"]["start"] == "2020-05-15T12:00:00Z"
+    assert anon["period"]["end"] == "2020-05-25T18:00:00Z"
+    assert anon["birthDate"] == "1995-06-20T08:30:00Z"

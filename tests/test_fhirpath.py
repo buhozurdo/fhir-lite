@@ -237,6 +237,9 @@ def test_comparisons_and_literals():
     check("<=", evaluate_fhirpath(data, "measurements.where(value <= 25.5).value") == [10, 25.5])
     check("bool true", evaluate_fhirpath(data, "measurements.where(valid = true).value") == [10, 50])
     check("bool false", evaluate_fhirpath(data, "measurements.where(valid = false).value") == [25.5])
+    check("!=", evaluate_fhirpath(data, "measurements.where(value != 10).value") == [25.5, 50])
+    check("contains binary op", evaluate_fhirpath({"tags": ["urgent", "lab"]}, "tags contains 'urgent'") == [True])
+    check("contains binary op str", evaluate_fhirpath({"name": "Emergency Room"}, "name contains 'gency'") == [True])
 
 
 def test_as_and_not():

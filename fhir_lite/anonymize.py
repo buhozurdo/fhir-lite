@@ -89,10 +89,31 @@ def _hash_id(original_id: str, salt: str = "") -> str:
     return f"anon-{h[:12]}"
 
 
+def _shift_date_iso(m: re.Match[str], shift_days: int) -> str:
+    """Helper to shift date components by given days."""
+    year = int(m.group(1))
+    try:
+        month = int(m.group(2))
+        day = int(m.group(3))
+        hour = int(m.group(4) or 0)
+        minute = int(m.group(5) or 0)
+        second = int(m.group(6) or 0)
+
+        dt = datetime.datetime(year, month, day, hour, minute, second)
+        shifted = dt + datetime.timedelta(days=shift_days)
+
+        if m.group(4) is not None:
+            return shifted.strftime("%Y-%m-%dT%H:%M:%SZ")
+        return shifted.strftime("%Y-%m-%d")
+    except Exception:
+        return f"{year:04d}-01-01"
+
+
 def _transform_date_string(val: str, config: DeidConfig) -> Optional[str]:
-    if config.date_handling == "preserve":
+    mode = config.date_handling
+    if mode == "preserve":
         return val
-    elif config.date_handling == "remove":
+    if mode == "remove":
         return None
 
     m = _ISO_DATE_RE.match(val)
@@ -100,49 +121,44 @@ def _transform_date_string(val: str, config: DeidConfig) -> Optional[str]:
         # If it's already just a year e.g. "1980", preserve it
         if re.match(r"^\d{4}$", val):
             return val
-        return None if config.date_handling == "remove" else val
+        return None
 
     year = m.group(1)
-
-    if config.date_handling == "year_only":
+    if mode == "year_only":
         return f"{year}-01-01"
-
-    elif config.date_handling == "shift":
-        try:
-            month = int(m.group(2))
-            day = int(m.group(3))
-            hour = int(m.group(4) or 0)
-            minute = int(m.group(5) or 0)
-            second = int(m.group(6) or 0)
-
-            dt = datetime.datetime(int(year), month, day, hour, minute, second)
-            shifted = dt + datetime.timedelta(days=config.date_shift_days)
-
-            if m.group(4) is not None:
-                return shifted.strftime("%Y-%m-%dT%H:%M:%SZ")
-            return shifted.strftime("%Y-%m-%d")
-        except Exception:
-            return f"{year}-01-01"
+    if mode == "shift":
+        return _shift_date_iso(m, config.date_shift_days)
 
     return val
+
+
+def _sanitize_period(period_dict: dict, config: DeidConfig) -> None:
+    """Sanitize start and end date fields inside a period dictionary."""
+    for p_key in ("start", "end"):
+        val = period_dict.get(p_key)
+        if isinstance(val, str):
+            tr = _transform_date_string(val, config)
+            if tr is None:
+                period_dict.pop(p_key, None)
+            else:
+                period_dict[p_key] = tr
+
+
+def _sanitize_date_field(data: dict, key: str, val: str, config: DeidConfig) -> None:
+    """Sanitize a single date field in place."""
+    transformed = _transform_date_string(val, config)
+    if transformed is None:
+        data.pop(key, None)
+    else:
+        data[key] = transformed
 
 
 def _sanitize_dates_in_dict(data: dict, config: DeidConfig) -> None:
     for key, val in list(data.items()):
         if key in COMMON_DATE_FIELDS and isinstance(val, str):
-            transformed = _transform_date_string(val, config)
-            if transformed is None:
-                del data[key]
-            else:
-                data[key] = transformed
+            _sanitize_date_field(data, key, val, config)
         elif key == "period" and isinstance(val, dict):
-            for p_key in ("start", "end"):
-                if p_key in val and isinstance(val[p_key], str):
-                    tr = _transform_date_string(val[p_key], config)
-                    if tr is None:
-                        del val[p_key]
-                    else:
-                        val[p_key] = tr
+            _sanitize_period(val, config)
         elif isinstance(val, dict):
             _sanitize_dates_in_dict(val, config)
         elif isinstance(val, list):
@@ -151,98 +167,113 @@ def _sanitize_dates_in_dict(data: dict, config: DeidConfig) -> None:
                     _sanitize_dates_in_dict(item, config)
 
 
+def _sanitize_names(data: dict, config: DeidConfig) -> None:
+    if not config.remove_names or "name" not in data:
+        return
+    if config.name_placeholder:
+        data["name"] = [{"use": "anonymous", "family": config.name_placeholder}]
+    else:
+        del data["name"]
+
+
+def _sanitize_addresses(data: dict, config: DeidConfig) -> None:
+    if not config.remove_addresses or "address" not in data:
+        return
+    if not config.keep_state_and_country or not isinstance(data["address"], list):
+        del data["address"]
+        return
+
+    safe_addresses = []
+    for addr in data["address"]:
+        if isinstance(addr, dict):
+            safe_addr = {
+                k: addr[k]
+                for k in ("state", "country", "use")
+                if k in addr
+            }
+            if safe_addr:
+                safe_addresses.append(safe_addr)
+    if safe_addresses:
+        data["address"] = safe_addresses
+    else:
+        del data["address"]
+
+
+def _sanitize_contacts(data: dict, config: DeidConfig) -> None:
+    contacts = data.get("contact")
+    if not isinstance(contacts, list):
+        return
+    for c in contacts:
+        if isinstance(c, dict):
+            if config.remove_names:
+                c.pop("name", None)
+            if config.remove_telecom:
+                c.pop("telecom", None)
+            if config.remove_addresses:
+                c.pop("address", None)
+
+
+def _pseudonymize_resource_id(
+    data: dict,
+    config: DeidConfig,
+    id_map: Optional[dict[str, str]],
+) -> None:
+    if not config.pseudonymize_id or "id" not in data:
+        return
+    old_id = data["id"]
+    new_id = _hash_id(old_id, config.salt)
+    data["id"] = new_id
+    if id_map is not None:
+        rtype = data.get("resourceType", "Resource")
+        id_map[f"{rtype}/{old_id}"] = f"{rtype}/{new_id}"
+        id_map[old_id] = new_id
+
+
 def _anonymize_single_resource(data: dict, config: DeidConfig, id_map: Optional[dict[str, str]] = None) -> dict:
     """Anonymize a single FHIR resource dictionary according to HIPAA Safe Harbor."""
-    # 1. Names
-    if config.remove_names:
-        if "name" in data:
-            if config.name_placeholder:
-                data["name"] = [{"use": "anonymous", "family": config.name_placeholder}]
-            else:
-                del data["name"]
+    _sanitize_names(data, config)
 
-    # 2. Telecom (phone, email, fax, url)
-    if config.remove_telecom and "telecom" in data:
-        del data["telecom"]
+    if config.remove_telecom:
+        data.pop("telecom", None)
 
-    # 3. Addresses
-    if config.remove_addresses and "address" in data:
-        if config.keep_state_and_country and isinstance(data["address"], list):
-            safe_addresses = []
-            for addr in data["address"]:
-                if isinstance(addr, dict):
-                    safe_addr = {
-                        k: addr[k]
-                        for k in ("state", "country", "use")
-                        if k in addr
-                    }
-                    if safe_addr:
-                        safe_addresses.append(safe_addr)
-            if safe_addresses:
-                data["address"] = safe_addresses
-            else:
-                del data["address"]
-        else:
-            del data["address"]
+    _sanitize_addresses(data, config)
 
-    # 4. Identifiers (MRN, SSN, licenses, account numbers)
-    if config.remove_identifiers and "identifier" in data:
-        del data["identifier"]
+    if config.remove_identifiers:
+        data.pop("identifier", None)
+    if config.remove_photos:
+        data.pop("photo", None)
+    if config.remove_narratives:
+        data.pop("text", None)
 
-    # 5. Photos / Biometrics
-    if config.remove_photos and "photo" in data:
-        del data["photo"]
+    _sanitize_contacts(data, config)
 
-    # 6. Narratives (text.div free-text)
-    if config.remove_narratives and "text" in data:
-        del data["text"]
-
-    # 7. Contacts (Patient.contact, Encounter.participant, etc.)
-    if "contact" in data and isinstance(data["contact"], list):
-        for c in data["contact"]:
-            if isinstance(c, dict):
-                if config.remove_names and "name" in c:
-                    del c["name"]
-                if config.remove_telecom and "telecom" in c:
-                    del c["telecom"]
-                if config.remove_addresses and "address" in c:
-                    del c["address"]
-
-    # 8. Extensions
     if config.remove_extensions:
         data.pop("extension", None)
         data.pop("modifierExtension", None)
 
-    # 9. Dates
     _sanitize_dates_in_dict(data, config)
-
-    # 10. ID Pseudonymization
-    if config.pseudonymize_id and "id" in data:
-        old_id = data["id"]
-        new_id = _hash_id(old_id, config.salt)
-        data["id"] = new_id
-        if id_map is not None:
-            rtype = data.get("resourceType", "Resource")
-            id_map[f"{rtype}/{old_id}"] = f"{rtype}/{new_id}"
-            id_map[old_id] = new_id
+    _pseudonymize_resource_id(data, config, id_map)
 
     return data
+
+
+def _remap_reference_uri(ref: str, id_map: dict[str, str]) -> str:
+    """Remap a reference URI using the pseudonymization ID map."""
+    if ref in id_map:
+        return id_map[ref]
+    for old_ref, new_ref in id_map.items():
+        if ref == old_ref or ref.endswith(f"/{old_ref}"):
+            return new_ref
+    return ref
 
 
 def _update_bundle_references(bundle_data: dict, id_map: dict[str, str]) -> None:
     """Replace old reference URIs with new pseudonymized ones inside bundle entries."""
     def _traverse(node: Any) -> None:
         if isinstance(node, dict):
-            if "reference" in node and isinstance(node["reference"], str):
-                ref = node["reference"]
-                if ref in id_map:
-                    node["reference"] = id_map[ref]
-                else:
-                    # Check relative e.g. Patient/123
-                    for old_ref, new_ref in id_map.items():
-                        if ref == old_ref or ref.endswith(f"/{old_ref}"):
-                            node["reference"] = new_ref
-                            break
+            ref = node.get("reference")
+            if isinstance(ref, str):
+                node["reference"] = _remap_reference_uri(ref, id_map)
             for v in node.values():
                 _traverse(v)
         elif isinstance(node, list):
@@ -250,6 +281,25 @@ def _update_bundle_references(bundle_data: dict, id_map: dict[str, str]) -> None
                 _traverse(item)
 
     _traverse(bundle_data)
+
+
+def _anonymize_bundle(
+    bundle_data: dict,
+    config: DeidConfig,
+    id_map: dict[str, str],
+) -> None:
+    """Anonymize all resources within a FHIR Bundle and update cross-references."""
+    entries = bundle_data.get("entry")
+    if not isinstance(entries, list):
+        return
+    for entry in entries:
+        if isinstance(entry, dict):
+            resource = entry.get("resource")
+            if isinstance(resource, dict):
+                _anonymize_single_resource(resource, config, id_map=id_map)
+
+    if config.pseudonymize_id and id_map:
+        _update_bundle_references(bundle_data, id_map)
 
 
 def anonymize(
@@ -287,24 +337,16 @@ def anonymize(
 
     # Check if resource is a Bundle
     if working_data.get("resourceType") == "Bundle" and "entry" in working_data:
-        entries = working_data.get("entry", [])
-        if isinstance(entries, list):
-            for entry in entries:
-                if isinstance(entry, dict) and "resource" in entry and isinstance(entry["resource"], dict):
-                    _anonymize_single_resource(entry["resource"], cfg, id_map=id_map)
-
-        if cfg.pseudonymize_id and id_map:
-            _update_bundle_references(working_data, id_map)
+        _anonymize_bundle(working_data, cfg, id_map)
     else:
         _anonymize_single_resource(working_data, cfg, id_map=id_map)
 
-    if is_fhir_resource:
-        if in_place:
-            return resource_or_data
-        cls = resource_or_data.__class__
-        return cls(working_data)
-
-    return working_data
+    if not is_fhir_resource:
+        return working_data
+    if in_place:
+        return resource_or_data
+    cls = resource_or_data.__class__
+    return cls(working_data)
 
 
 __all__ = ["DeidConfig", "anonymize"]

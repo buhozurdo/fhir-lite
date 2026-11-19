@@ -207,43 +207,52 @@ class Parser:
             return steps[0]
         return PathNode(steps)
 
+    def _parse_call_args(self) -> list[ASTNode]:
+        args: list[ASTNode] = []
+        if self.match("RPAREN"):
+            return args
+        while True:
+            args.append(self.expr())
+            if self.match("COMMA"):
+                continue
+            if self.match("RPAREN"):
+                break
+            raise FHIRPathError(f"Expected ',' or ')' at position {self.current().pos}")
+        return args
+
+    def _parse_literal(self, tok: Token) -> Optional[ASTNode]:
+        if tok.type == "STRING":
+            self.pos += 1
+            val = tok.value[1:-1].encode("utf-8").decode("unicode_escape")
+            return LiteralNode(val)
+        if tok.type == "NUMBER":
+            self.pos += 1
+            val_num = float(tok.value) if "." in tok.value else int(tok.value)
+            return LiteralNode(val_num)
+        if tok.type == "BOOL":
+            self.pos += 1
+            return LiteralNode(tok.value == "true")
+        return None
+
     def invocation(self) -> ASTNode:
         tok = self.current()
         if tok.type in ("IDENT", "CONTAINS", "NOT", "AND", "OR"):
             self.pos += 1
             name = tok.value
             if self.match("LPAREN"):
-                args: list[ASTNode] = []
-                if not self.match("RPAREN"):
-                    while True:
-                        args.append(self.expr())
-                        if self.match("COMMA"):
-                            continue
-                        elif self.match("RPAREN"):
-                            break
-                        else:
-                            raise FHIRPathError(f"Expected ',' or ')' at position {self.current().pos}")
-                return FunctionCallNode(name, args)
+                return FunctionCallNode(name, self._parse_call_args())
             return IdentifierNode(name)
-        elif tok.type == "STRING":
-            self.pos += 1
-            # Unescape string
-            val = tok.value[1:-1].encode("utf-8").decode("unicode_escape")
-            return LiteralNode(val)
-        elif tok.type == "NUMBER":
-            self.pos += 1
-            val_str = tok.value
-            val = float(val_str) if "." in val_str else int(val_str)
-            return LiteralNode(val)
-        elif tok.type == "BOOL":
-            self.pos += 1
-            return LiteralNode(tok.value == "true")
-        elif self.match("LPAREN"):
+
+        lit = self._parse_literal(tok)
+        if lit is not None:
+            return lit
+
+        if self.match("LPAREN"):
             node = self.expr()
             self.expect("RPAREN")
             return node
-        else:
-            raise FHIRPathError(f"Unexpected token {tok.type} ({tok.value!r}) at position {tok.pos}")
+
+        raise FHIRPathError(f"Unexpected token {tok.type} ({tok.value!r}) at position {tok.pos}")
 
 
 # ----------------------------------------------------------------------
@@ -271,217 +280,205 @@ def _is_truthy(val: Any) -> bool:
     return bool(val)
 
 
+def _eval_comparison(op: str, l: Any, r: Any) -> list[Any]:
+    """Evaluate relational or equality binary operator on unboxed values."""
+    if op == "=":
+        return [l == r]
+    if op == "!=":
+        return [l != r]
+    if op == "<":
+        return [l is not None and r is not None and l < r]
+    if op == "<=":
+        return [l is not None and r is not None and l <= r]
+    if op == ">":
+        return [l is not None and r is not None and l > r]
+    if op == ">=":
+        return [l is not None and r is not None and l >= r]
+    if op == "contains":
+        if isinstance(l, str):
+            return [str(r) in l]
+        if isinstance(l, (list, tuple)):
+            return [r in l]
+        return [False]
+
+    raise FHIRPathError(f"Unsupported binary operator: '{op}'")
+
+
 class Evaluator:
     def __init__(self, root: Any):
         self.root = root
 
+    def _extract_prop(self, item: Any, name: str) -> list[Any]:
+        data = _get_item_data(item)
+        if isinstance(data, dict):
+            if name == data.get("resourceType") and name not in data:
+                return [item]
+            if name in data:
+                val = data[name]
+                if isinstance(val, list):
+                    return val
+                elif val is not None:
+                    return [val]
+            return []
+        if hasattr(item, name):
+            val = getattr(item, name)
+            if isinstance(val, list):
+                return val
+            elif val is not None:
+                return [val]
+        return []
+
+    def _eval_identifier(self, node: IdentifierNode, context: list[Any]) -> list[Any]:
+        res: list[Any] = []
+        for item in context:
+            res.extend(self._extract_prop(item, node.name))
+        return res
+
     def eval(self, node: ASTNode, context: list[Any]) -> list[Any]:
         if isinstance(node, LiteralNode):
             return [node.value]
-
-        elif isinstance(node, IdentifierNode):
-            res: list[Any] = []
-            for item in context:
-                data = _get_item_data(item)
-                if isinstance(data, dict):
-                    # Check if identifier matches resourceType at root level
-                    if node.name == data.get("resourceType") and node.name not in data:
-                        res.append(item)
-                    elif node.name in data:
-                        val = data[node.name]
-                        if isinstance(val, list):
-                            res.extend(val)
-                        elif val is not None:
-                            res.append(val)
-                elif hasattr(item, node.name):
-                    val = getattr(item, node.name)
-                    if isinstance(val, list):
-                        res.extend(val)
-                    elif val is not None:
-                        res.append(val)
-            return res
-
-        elif isinstance(node, IndexNode):
-            if 0 <= node.index < len(context):
-                return [context[node.index]]
-            return []
-
-        elif isinstance(node, PathNode):
+        if isinstance(node, IdentifierNode):
+            return self._eval_identifier(node, context)
+        if isinstance(node, IndexNode):
+            return [context[node.index]] if 0 <= node.index < len(context) else []
+        if isinstance(node, PathNode):
             curr = context
             for step in node.steps:
                 curr = self.eval(step, curr)
             return curr
-
-        elif isinstance(node, FunctionCallNode):
+        if isinstance(node, FunctionCallNode):
             return self._eval_function(node.name, node.args, context)
-
-        elif isinstance(node, BinaryOpNode):
+        if isinstance(node, BinaryOpNode):
             return self._eval_binary(node.op, node.left, node.right, context)
 
         raise FHIRPathError(f"Unknown AST node type: {type(node).__name__}")
 
+    def _fn_where(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if not args:
+            raise FHIRPathError(".where() requires a criteria expression")
+        criteria = args[0]
+        return [item for item in context if _is_truthy(self.eval(criteria, [item]))]
+
+    def _fn_exists(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if args:
+            filtered = self._fn_where(args, context)
+            return [len(filtered) > 0]
+        return [len(context) > 0]
+
+    def _fn_skip(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if not args:
+            raise FHIRPathError(".skip() requires a count argument")
+        n_res = self.eval(args[0], context)
+        n = int(n_res[0]) if n_res else 0
+        return context[n:]
+
+    def _fn_take(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if not args:
+            raise FHIRPathError(".take() requires a count argument")
+        n_res = self.eval(args[0], context)
+        n = int(n_res[0]) if n_res else 0
+        return context[:n]
+
+    def _fn_distinct(self, context: list[Any]) -> list[Any]:
+        seen: list[Any] = []
+        for it in context:
+            if it not in seen:
+                seen.append(it)
+        return seen
+
+    def _fn_contains(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if not args:
+            raise FHIRPathError(".contains() requires an argument")
+        arg_val = self.eval(args[0], context)
+        search_val = arg_val[0] if arg_val else ""
+        res: list[Any] = []
+        for item in context:
+            if isinstance(item, str):
+                res.append(str(search_val) in item)
+            elif isinstance(item, (list, tuple)):
+                res.append(search_val in item)
+        return res if res else [False]
+
+    def _fn_starts_with(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if not args:
+            raise FHIRPathError(".startsWith() requires a prefix argument")
+        arg_val = self.eval(args[0], context)
+        prefix = str(arg_val[0]) if arg_val else ""
+        res = [isinstance(item, str) and item.startswith(prefix) for item in context]
+        return [any(res)] if res else [False]
+
+    def _fn_ends_with(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if not args:
+            raise FHIRPathError(".endsWith() requires a suffix argument")
+        arg_val = self.eval(args[0], context)
+        suffix = str(arg_val[0]) if arg_val else ""
+        res = [isinstance(item, str) and item.endswith(suffix) for item in context]
+        return [any(res)] if res else [False]
+
+    def _fn_join(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        sep = ""
+        if args:
+            sep_res = self.eval(args[0], context)
+            sep = str(sep_res[0]) if sep_res else ""
+        return [sep.join(str(it) for it in context)]
+
+    def _fn_as(self, args: list[ASTNode], context: list[Any]) -> list[Any]:
+        if not args:
+            raise FHIRPathError(".as() requires a type name")
+        target_type = getattr(args[0], "name", None) or getattr(args[0], "value", "")
+        return [
+            it for it in context
+            if _get_item_data(it).get("resourceType") == target_type
+        ]
+
     def _eval_function(self, name: str, args: list[ASTNode], context: list[Any]) -> list[Any]:
-        if name == "where":
-            if not args:
-                raise FHIRPathError(".where() requires a criteria expression")
-            criteria = args[0]
-            filtered: list[Any] = []
-            for item in context:
-                item_ctx = [item]
-                res = self.eval(criteria, item_ctx)
-                if _is_truthy(res):
-                    filtered.append(item)
-            return filtered
+        simple_dispatch = {
+            "empty": lambda ctx: [len(ctx) == 0],
+            "first": lambda ctx: [ctx[0]] if ctx else [],
+            "last": lambda ctx: [ctx[-1]] if ctx else [],
+            "count": lambda ctx: [len(ctx)],
+            "tail": lambda ctx: ctx[1:] if len(ctx) > 1 else [],
+            "distinct": self._fn_distinct,
+            "not": lambda ctx: [not _is_truthy(ctx)],
+            "lower": lambda ctx: [item.lower() if isinstance(item, str) else item for item in ctx],
+            "upper": lambda ctx: [item.upper() if isinstance(item, str) else item for item in ctx],
+        }
+        if name in simple_dispatch:
+            return simple_dispatch[name](context)
 
-        elif name == "exists":
-            if args:
-                # exists(criteria)
-                filtered = self._eval_function("where", args, context)
-                return [len(filtered) > 0]
-            return [len(context) > 0]
-
-        elif name == "empty":
-            return [len(context) == 0]
-
-        elif name == "first":
-            return [context[0]] if context else []
-
-        elif name == "last":
-            return [context[-1]] if context else []
-
-        elif name == "count":
-            return [len(context)]
-
-        elif name == "skip":
-            if not args:
-                raise FHIRPathError(".skip() requires a count argument")
-            n_res = self.eval(args[0], context)
-            n = int(n_res[0]) if n_res else 0
-            return context[n:]
-
-        elif name == "take":
-            if not args:
-                raise FHIRPathError(".take() requires a count argument")
-            n_res = self.eval(args[0], context)
-            n = int(n_res[0]) if n_res else 0
-            return context[:n]
-
-        elif name == "tail":
-            return context[1:] if len(context) > 1 else []
-
-        elif name == "distinct":
-            seen: list[Any] = []
-            for it in context:
-                if it not in seen:
-                    seen.append(it)
-            return seen
-
-        elif name == "contains":
-            if not args:
-                raise FHIRPathError(".contains() requires an argument")
-            arg_val = self.eval(args[0], context)
-            search_val = arg_val[0] if arg_val else ""
-            res: list[Any] = []
-            for item in context:
-                if isinstance(item, str):
-                    res.append(str(search_val) in item)
-                elif isinstance(item, (list, tuple)):
-                    res.append(search_val in item)
-            return res if res else [False]
-
-        elif name == "startsWith":
-            if not args:
-                raise FHIRPathError(".startsWith() requires a prefix argument")
-            arg_val = self.eval(args[0], context)
-            prefix = str(arg_val[0]) if arg_val else ""
-            res = [isinstance(item, str) and item.startswith(prefix) for item in context]
-            return [any(res)] if res else [False]
-
-        elif name == "endsWith":
-            if not args:
-                raise FHIRPathError(".endsWith() requires a suffix argument")
-            arg_val = self.eval(args[0], context)
-            suffix = str(arg_val[0]) if arg_val else ""
-            res = [isinstance(item, str) and item.endswith(suffix) for item in context]
-            return [any(res)] if res else [False]
-
-        elif name == "lower":
-            return [item.lower() if isinstance(item, str) else item for item in context]
-
-        elif name == "upper":
-            return [item.upper() if isinstance(item, str) else item for item in context]
-
-        elif name == "join":
-            sep = ""
-            if args:
-                sep_res = self.eval(args[0], context)
-                sep = str(sep_res[0]) if sep_res else ""
-            return [sep.join(str(it) for it in context)]
-
-        elif name == "not":
-            return [not _is_truthy(context)]
-
-        elif name == "as":
-            # Filter by resourceType e.g. .as(Observation)
-            if not args:
-                raise FHIRPathError(".as() requires a type name")
-            target_type = getattr(args[0], "name", None) or getattr(args[0], "value", "")
-            return [
-                it for it in context
-                if (_get_item_data(it).get("resourceType") == target_type)
-            ]
+        arg_dispatch = {
+            "where": self._fn_where,
+            "exists": self._fn_exists,
+            "skip": self._fn_skip,
+            "take": self._fn_take,
+            "contains": self._fn_contains,
+            "startsWith": self._fn_starts_with,
+            "endsWith": self._fn_ends_with,
+            "join": self._fn_join,
+            "as": self._fn_as,
+        }
+        if name in arg_dispatch:
+            return arg_dispatch[name](args, context)
 
         raise FHIRPathError(f"Unsupported FHIRPath function: '{name}'")
 
-    def _eval_binary(self, op: str, left_node: ASTNode, right_node: ASTNode, context: list[Any]) -> list[Any]:
+    def _eval_logical(self, op: str, left_node: ASTNode, right_node: ASTNode, context: list[Any]) -> list[Any]:
+        left_val = self.eval(left_node, context)
         if op == "and":
-            left_val = self.eval(left_node, context)
-            if not _is_truthy(left_val):
-                return [False]
-            right_val = self.eval(right_node, context)
-            return [_is_truthy(right_val)]
+            return [_is_truthy(self.eval(right_node, context))] if _is_truthy(left_val) else [False]
+        return [True] if _is_truthy(left_val) else [_is_truthy(self.eval(right_node, context))]
 
-        elif op == "or":
-            left_val = self.eval(left_node, context)
-            if _is_truthy(left_val):
-                return [True]
-            right_val = self.eval(right_node, context)
-            return [_is_truthy(right_val)]
+    def _eval_binary(self, op: str, left_node: ASTNode, right_node: ASTNode, context: list[Any]) -> list[Any]:
+        if op in ("and", "or"):
+            return self._eval_logical(op, left_node, right_node, context)
 
-        # Relational or equality
         left_val = self.eval(left_node, context)
         right_val = self.eval(right_node, context)
 
-        # Unbox single item collections for comparison
-        l = left_val[0] if len(left_val) == 1 else left_val
-        r = right_val[0] if len(right_val) == 1 else right_val
+        l = left_val[0] if len(left_val) == 1 else (None if len(left_val) == 0 else left_val)
+        r = right_val[0] if len(right_val) == 1 else (None if len(right_val) == 0 else right_val)
 
-        # If left was empty collection, treat as None/empty
-        if len(left_val) == 0:
-            l = None
-        if len(right_val) == 0:
-            r = None
-
-        if op == "=":
-            return [l == r]
-        elif op == "!=":
-            return [l != r]
-        elif op == "<":
-            return [l is not None and r is not None and l < r]
-        elif op == "<=":
-            return [l is not None and r is not None and l <= r]
-        elif op == ">":
-            return [l is not None and r is not None and l > r]
-        elif op == ">=":
-            return [l is not None and r is not None and l >= r]
-        elif op == "contains":
-            if isinstance(l, str):
-                return [str(r) in l]
-            elif isinstance(l, (list, tuple)):
-                return [r in l]
-            return [False]
-
-        raise FHIRPathError(f"Unsupported binary operator: '{op}'")
+        return _eval_comparison(op, l, r)
 
 
 # ----------------------------------------------------------------------

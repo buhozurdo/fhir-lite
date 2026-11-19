@@ -702,7 +702,7 @@ class OperationOutcome(FHIRResource):
 
 class Reference:
     """Helper for parsing, creating, and validating FHIR Reference strings and dictionaries."""
-    __slots__ = ("reference", "resource_type", "id", "display")
+    __slots__ = ("_reference", "resource_type", "id", "display")
 
     def __init__(
         self,
@@ -711,10 +711,28 @@ class Reference:
         id: str | None = None,
         display: str | None = None,
     ):
-        self.reference = reference
+        self._reference = reference
         self.resource_type = resource_type
         self.id = id
         self.display = display
+
+    @property
+    def reference(self) -> str:
+        """The reference URI string."""
+        return self._reference
+
+    @reference.setter
+    def reference(self, val: str) -> None:
+        self._reference = val
+
+    @property
+    def value(self) -> str:
+        """Alias for reference URI string."""
+        return self._reference
+
+    @value.setter
+    def value(self, val: str) -> None:
+        self._reference = val
 
     @classmethod
     def parse(cls, reference: str | dict) -> "Reference":

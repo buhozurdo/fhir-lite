@@ -17,6 +17,10 @@ from pathlib import Path
 from typing import Any, List, Optional, Sequence
 
 
+ERR_INPUT_EMPTY = "Error: Input is empty.\n"
+HELP_INPUT_PATH = "Input file path (or '-' / omit for stdin)."
+
+
 def _get_version() -> str:
     try:
         from . import __version__
@@ -64,7 +68,7 @@ def _read_input(input_path: Optional[str]) -> str:
     if not input_path or input_path == "-":
         return sys.stdin.read()
     safe_path = _resolve_safe_path(input_path, for_write=False)
-    with open(safe_path, "r", encoding="utf-8") as f:  # NOSONAR: Path Traversal (CWE-22) mitigated via _resolve_safe_path
+    with open(safe_path, "r", encoding="utf-8") as f:  # NOSONAR
         return f.read()
 
 
@@ -76,10 +80,27 @@ def _write_output(content: str, output_path: Optional[str]) -> None:
             sys.stdout.write("\n")
     else:
         safe_path = _resolve_safe_path(output_path, for_write=True)
-        with open(safe_path, "w", encoding="utf-8") as f:  # NOSONAR: Path Traversal (CWE-22) mitigated via _resolve_safe_path
+        with open(safe_path, "w", encoding="utf-8") as f:  # NOSONAR
             f.write(content)
             if not content.endswith("\n"):
                 f.write("\n")
+
+
+def _detect_target_format(content: str, target: Optional[str], output_path: Optional[str]) -> Optional[str]:
+    """Detect conversion target format from arguments or input content."""
+    if target:
+        return target
+    if output_path and output_path != "-":
+        lower_out = output_path.lower()
+        if lower_out.endswith(".xml"):
+            return "xml"
+        if lower_out.endswith(".json"):
+            return "json"
+    if content.startswith("<"):
+        return "json"
+    if content.startswith(("{", "[")):
+        return "xml"
+    return None
 
 
 def cmd_convert(args: argparse.Namespace) -> int:
@@ -93,28 +114,13 @@ def cmd_convert(args: argparse.Namespace) -> int:
 
     content = raw_content.strip()
     if not content:
-        sys.stderr.write("Error: Input is empty.\n")
+        sys.stderr.write(ERR_INPUT_EMPTY)
         return 1
 
-    # Determine target format
-    target_format = args.to
+    target_format = _detect_target_format(content, args.to, args.output)
     if not target_format:
-        if args.output and args.output != "-":
-            lower_out = args.output.lower()
-            if lower_out.endswith(".xml"):
-                target_format = "xml"
-            elif lower_out.endswith(".json"):
-                target_format = "json"
-
-    if not target_format:
-        # Auto-detect from input content
-        if content.startswith("<"):
-            target_format = "json"
-        elif content.startswith("{") or content.startswith("["):
-            target_format = "xml"
-        else:
-            sys.stderr.write("Error: Could not auto-detect format. Use --to [json|xml].\n")
-            return 1
+        sys.stderr.write("Error: Could not auto-detect format. Use --to [json|xml].\n")
+        return 1
 
     try:
         if target_format == "xml":
@@ -144,7 +150,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
     content = raw_content.strip()
     if not content:
-        sys.stderr.write("Error: Input is empty.\n")
+        sys.stderr.write(ERR_INPUT_EMPTY)
         return 1
 
     # Detect format
@@ -185,7 +191,7 @@ def cmd_fhirpath(args: argparse.Namespace) -> int:
 
     content = raw_content.strip()
     if not content:
-        sys.stderr.write("Error: Input is empty.\n")
+        sys.stderr.write(ERR_INPUT_EMPTY)
         return 1
 
     is_xml = content.startswith("<")
@@ -229,7 +235,7 @@ def cmd_anonymize(args: argparse.Namespace) -> int:
 
     content = raw_content.strip()
     if not content:
-        sys.stderr.write("Error: Input is empty.\n")
+        sys.stderr.write(ERR_INPUT_EMPTY)
         return 1
 
     is_xml = content.startswith("<")
@@ -288,7 +294,7 @@ def build_parser() -> argparse.ArgumentParser:
         "input",
         nargs="?",
         default="-",
-        help="Input file path (or '-' / omit for stdin).",
+        help=HELP_INPUT_PATH,
     )
     p_convert.add_argument(
         "-o",
@@ -326,7 +332,7 @@ def build_parser() -> argparse.ArgumentParser:
         "input",
         nargs="?",
         default="-",
-        help="Input file path (or '-' / omit for stdin).",
+        help=HELP_INPUT_PATH,
     )
 
     # fhirpath subcommand
@@ -343,7 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
         "input",
         nargs="?",
         default="-",
-        help="Input file path (or '-' / omit for stdin).",
+        help=HELP_INPUT_PATH,
     )
     p_fhirpath.add_argument(
         "--first",
@@ -368,7 +374,7 @@ def build_parser() -> argparse.ArgumentParser:
         "input",
         nargs="?",
         default="-",
-        help="Input file path (or '-' / omit for stdin).",
+        help=HELP_INPUT_PATH,
     )
     p_anon.add_argument(
         "-o",
