@@ -299,6 +299,14 @@ class Observation(FHIRResource):
             errors.append("Observation requires 'code'")
         return errors
 
+    def has_standard_unit(self) -> bool:
+        """Check if observation valueQuantity uses a pre-compiled standard UCUM unit."""
+        val_qty = self.data.get("valueQuantity")
+        if isinstance(val_qty, dict):
+            unit = val_qty.get("unit") or val_qty.get("code")
+            return unit in self.COMMON_UCUM_UNITS
+        return False
+
 
 class Bundle(FHIRResource):
     """FHIR Bundle resource for batch, transaction, searchset, and collection interactions."""
@@ -323,6 +331,15 @@ class Bundle(FHIRResource):
     def entries(self) -> list[dict]:
         """Returns the list of raw entry dicts."""
         return self.data.get("entry", [])
+
+    def __iter__(self) -> Iterator[FHIRResource]:
+        """Iterate directly over typed FHIRResource instances in the bundle using lazy evaluation."""
+        return self.iter_resources()
+
+    def __len__(self) -> int:
+        """Return the count of entries in the bundle."""
+        entries = self.data.get("entry")
+        return len(entries) if isinstance(entries, list) else 0
 
     def iter_entries(self) -> Iterator[dict]:
         """Generator yielding raw entry dicts lazily without list duplication."""

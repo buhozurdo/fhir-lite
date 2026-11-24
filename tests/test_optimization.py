@@ -181,6 +181,18 @@ def test_bundle_and_ndjson_performance_optimizations():
     first_line = next(line_gen)
     check("iter_dumps_ndjson yields line lazily", first_line.endswith("\n"))
 
+    # Bundle __iter__ and __len__
+    check("len(bundle) matches entry count", len(bundle) == 502)
+    iter_items = [r.id for r in bundle]
+    check("bundle __iter__ yields FHIRResources", len(iter_items) == 501 and "rare-pat" in iter_items)
+    check("len(empty_b) is 0", len(empty_b) == 0)
+
+    # Observation has_standard_unit
+    obs_std = Observation(status="final", code={"text": "BP"}, valueQuantity={"value": 120, "unit": "mmHg"})
+    check("obs_std has_standard_unit is True", obs_std.has_standard_unit() is True)
+    obs_custom = Observation(status="final", code={"text": "custom"}, valueQuantity={"value": 5, "unit": "custom_unit"})
+    check("obs_custom has_standard_unit is False", obs_custom.has_standard_unit() is False)
+
 
 if __name__ == "__main__":
     tests = [
